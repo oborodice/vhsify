@@ -13,16 +13,15 @@ pub fn process(input_path: &str) -> String {
     };
 
     let mut rgb = img.into_rgb8();
-    let (width, height) = rgb.dimensions();
-
-    apply_vhs_effect(&mut rgb, width, height);
+    apply_effect(&mut rgb, 0);
 
     let output_path = make_output_path(input_path);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
 }
 
-fn apply_vhs_effect(rgb: &mut image::RgbImage, width: u32, height: u32) {
+pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
+    let (width, height) = rgb.dimensions();
     let mut effect = NtscEffect::default();
     effect.use_field = UseField::Both;
     if let Some(scale) = effect.scale.as_mut() {
@@ -31,7 +30,7 @@ fn apply_vhs_effect(rgb: &mut image::RgbImage, width: u32, height: u32) {
     effect.apply_effect_to_buffer::<Rgb, u8>(
         (width as usize, height as usize),
         rgb.as_mut(),
-        0,
+        frame_num,
         [1.0, 1.0],
     );
 }

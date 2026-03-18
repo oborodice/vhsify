@@ -1017,6 +1017,7 @@ dependencies = [
  "image",
  "kamadak-exif",
  "ntsc-rs",
+ "rayon",
 ]
 
 [[package]]
