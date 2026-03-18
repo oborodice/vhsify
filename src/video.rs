@@ -1,10 +1,9 @@
-use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rayon::prelude::*;
 
-use crate::image as img;
+use crate::image as vhs_image;
 
 pub fn process(input_path: &str) -> String {
     let temp_dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
@@ -27,9 +26,8 @@ pub fn process(input_path: &str) -> String {
     let counter = AtomicUsize::new(0);
     frames.par_iter().enumerate().for_each(|(i, frame_path)| {
         let frame_str = frame_path.to_str().unwrap();
-        let dynimg = image::open(frame_str).expect("Failed to open frame");
-        let mut rgb = dynimg.into_rgb8();
-        img::apply_effect(&mut rgb, i);
+        let mut rgb = image::open(frame_str).expect("Failed to open frame").into_rgb8();
+        vhs_image::apply_effect(&mut rgb, i);
         rgb.save(frame_str).expect("Failed to save frame");
         let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
         eprint!("\rProcessing frame {}/{}", done, total);
@@ -37,7 +35,7 @@ pub fn process(input_path: &str) -> String {
     eprintln!();
 
     let fps = get_fps(input_path);
-    let output_path = make_output_path(input_path);
+    let output_path = crate::make_output_path(input_path);
     reassemble(input_path, frame_pattern_str, &fps, &output_path);
 
     std::fs::remove_dir_all(&temp_dir).ok();
@@ -83,9 +81,3 @@ fn reassemble(input_path: &str, frame_pattern: &str, fps: &str, output_path: &st
         .expect("Failed to run ffmpeg");
 }
 
-fn make_output_path(input_path: &str) -> String {
-    let path = Path::new(input_path);
-    let stem = path.file_stem().unwrap().to_str().unwrap();
-    let ext = path.extension().unwrap().to_str().unwrap();
-    format!("{}_vhs.{}", stem, ext)
-}

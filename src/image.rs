@@ -15,7 +15,7 @@ pub fn process(input_path: &str) -> String {
     let mut rgb = img.into_rgb8();
     apply_effect(&mut rgb, 0);
 
-    let output_path = make_output_path(input_path);
+    let output_path = crate::make_output_path(input_path);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
 }
@@ -35,9 +35,3 @@ pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
     );
 }
 
-fn make_output_path(input_path: &str) -> String {
-    let path = std::path::Path::new(input_path);
-    let stem = path.file_stem().unwrap().to_str().unwrap();
-    let ext = path.extension().unwrap().to_str().unwrap();
-    format!("{}_vhs.{}", stem, ext)
-}
