@@ -369,6 +369,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "242402749acf71e6f32f5857598b7002c4058a4e3c3b22b4c7d51cab9aea754e"
 
 [[package]]
+name = "hound"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1014,6 +1020,7 @@ dependencies = [
 name = "vhsify"
 version = "0.1.0"
 dependencies = [
+ "hound",
  "image",
  "kamadak-exif",
  "ntsc-rs",

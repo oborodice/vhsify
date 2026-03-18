@@ -11,8 +11,11 @@ pub fn process(input_path: &str) -> String {
 
     let frame_pattern = temp_dir.join("frame_%05d.jpg");
     let frame_pattern_str = frame_pattern.to_str().unwrap();
+    let raw_wav = temp_dir.join("audio_raw.wav");
+    let processed_wav = temp_dir.join("audio_vhs.wav");
 
     extract_frames(input_path, frame_pattern_str);
+    let has_audio = crate::audio::extract(input_path, raw_wav.to_str().unwrap());
 
     let mut frames: Vec<_> = std::fs::read_dir(&temp_dir)
         .unwrap()
@@ -34,9 +37,19 @@ pub fn process(input_path: &str) -> String {
     });
     eprintln!();
 
+    if has_audio {
+        eprintln!("Processing audio...");
+        crate::audio::apply_effects(raw_wav.to_str().unwrap(), processed_wav.to_str().unwrap());
+    }
+
     let fps = get_fps(input_path);
     let output_path = crate::make_output_path(input_path);
-    reassemble(input_path, frame_pattern_str, &fps, &output_path);
+    let audio_path = if has_audio {
+        Some(processed_wav.to_str().unwrap().to_string())
+    } else {
+        None
+    };
+    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
 
     std::fs::remove_dir_all(&temp_dir).ok();
 
@@ -64,20 +77,31 @@ fn get_fps(input_path: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-fn reassemble(input_path: &str, frame_pattern: &str, fps: &str, output_path: &str) {
+fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Option<&str>) {
+    let mut args = vec![
+        "-r".to_string(), fps.to_string(),
+        "-i".to_string(), frame_pattern.to_string(),
+    ];
+
+    if let Some(audio) = audio_path {
+        args.extend([
+            "-i".to_string(), audio.to_string(),
+            "-map".to_string(), "0:v".to_string(),
+            "-map".to_string(), "1:a".to_string(),
+            "-c:a".to_string(), "aac".to_string(),
+        ]);
+    } else {
+        args.extend(["-map".to_string(), "0:v".to_string()]);
+    }
+
+    args.extend([
+        "-pix_fmt".to_string(), "yuv420p".to_string(),
+        output_path.to_string(),
+        "-y".to_string(),
+    ]);
+
     Command::new("ffmpeg")
-        .args([
-            "-r", fps,
-            "-i", frame_pattern,
-            "-i", input_path,
-            "-map", "0:v",
-            "-map", "1:a?",
-            "-c:a", "copy",
-            "-pix_fmt", "yuv420p",
-            output_path,
-            "-y",
-        ])
+        .args(&args)
         .status()
         .expect("Failed to run ffmpeg");
 }
-
