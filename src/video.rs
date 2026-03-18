@@ -58,7 +58,7 @@ pub fn process(input_path: &str) -> String {
 
 fn extract_frames(input_path: &str, frame_pattern: &str) {
     Command::new("ffmpeg")
-        .args(["-i", input_path, "-vf", "scale=-2:480", frame_pattern, "-y"])
+        .args(["-i", input_path, "-vf", "scale=720:480:force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2", frame_pattern, "-y"])
         .status()
         .expect("Failed to run ffmpeg");
 }
