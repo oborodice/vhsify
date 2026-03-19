@@ -74,7 +74,7 @@ fn get_fps(input_path: &str) -> String {
         ])
         .output()
         .expect("Failed to run ffprobe");
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
+    String::from_utf8_lossy(&output.stdout).trim().trim_end_matches(',').to_string()
 }
 
 fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Option<&str>) {
