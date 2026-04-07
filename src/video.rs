@@ -6,6 +6,10 @@ use rayon::prelude::*;
 use crate::image as vhs_image;
 
 pub fn process(input_path: &str) -> String {
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(8 * 1024 * 1024)
+        .build_global()
+        .ok();
     let temp_dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
     std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
@@ -33,9 +37,15 @@ pub fn process(input_path: &str) -> String {
         vhs_image::apply_effect(&mut rgb, i);
         rgb.save(frame_str).expect("Failed to save frame");
         let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
-        eprint!("\rProcessing frame {}/{}", done, total);
+        let pct = done * 100 / total;
+        if done % (total / 20).max(1) == 0 || done == total {
+            let status = format!("frames {}/{} ({}%)\n", done, total, pct);
+            let _ = std::fs::write("/tmp/vhsify_progress.txt", &status);
+            eprint!("\r{}", status.trim());
+        }
     });
     eprintln!();
+    let _ = std::fs::write("/tmp/vhsify_progress.txt", "audio processing...\n");
 
     if has_audio {
         eprintln!("Processing audio...");
