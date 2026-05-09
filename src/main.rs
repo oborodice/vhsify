@@ -13,17 +13,20 @@ struct Args {
     mode: utils::ScaleMode,
     #[arg(long)]
     output: Option<String>,
+    #[arg(long)]
+    output_name: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
     let input_path = &args.input;
     let output_dir = args.output.as_deref();
+    let output_name = args.output_name.as_deref();
 
     let output_path = if is_image(input_path) {
-        image::process(input_path, args.mode, output_dir)
+        image::process(input_path, args.mode, output_dir, output_name)
     } else if is_video(input_path) {
-        video::process(input_path, args.mode, output_dir)
+        video::process(input_path, args.mode, output_dir, output_name)
     } else {
         eprintln!("Unsupported file type: {}", input_path);
         std::process::exit(1);

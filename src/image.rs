@@ -2,7 +2,7 @@ use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 
 use crate::exif;
 
-pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>) -> String {
+pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>, output_name: Option<&str>) -> String {
     let img = image::open(input_path).expect("Failed to open image");
     let img = correct_orientation(img, input_path);
     let img = scale_to_4_3(img, scale_mode);
@@ -10,7 +10,7 @@ pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir
     let mut rgb = img.into_rgb8();
     apply_effect(&mut rgb, 0);
 
-    let output_path = crate::utils::make_output_path(input_path, output_dir);
+    let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
 }

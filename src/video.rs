@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use crate::image as vhs_image;
 
-pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>) -> String {
+pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>, output_name: Option<&str>) -> String {
     init_thread_pool();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
@@ -18,7 +18,7 @@ pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir
     apply_effects_to_frames(&frames, &temp.progress);
 
     let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
-    let output_path = crate::utils::make_output_path(input_path, output_dir);
+    let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
 
