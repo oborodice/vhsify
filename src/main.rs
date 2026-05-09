@@ -25,21 +25,22 @@ fn main() {
 
 fn is_video(path: &str) -> bool {
     matches!(
-        ext(path),
+        ext(path).as_str(),
         "mp4" | "mov" | "avi" | "mkv"
     )
 }
 
 fn is_image(path: &str) -> bool {
     matches!(
-        ext(path),
+        ext(path).as_str(),
         "jpg" | "jpeg" | "png" | "webp" | "avif"
     )
 }
 
-fn ext(path: &str) -> &str {
+fn ext(path: &str) -> String {
     std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
+        .to_lowercase()
 }
