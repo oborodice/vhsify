@@ -53,7 +53,7 @@ pub fn process(input_path: &str) -> String {
     }
 
     let fps = get_fps(input_path);
-    let output_path = crate::make_output_path(input_path);
+    let output_path = crate::utils::make_output_path(input_path);
     let audio_path = if has_audio {
         Some(processed_wav.to_str().unwrap().to_string())
     } else {
