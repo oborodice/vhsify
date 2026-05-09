@@ -4,13 +4,7 @@ use crate::exif;
 
 pub fn process(input_path: &str) -> String {
     let img = image::open(input_path).expect("Failed to open image");
-
-    let img = match exif::read_orientation(input_path) {
-        3 => img.rotate180(),
-        6 => img.rotate90(),
-        8 => img.rotate270(),
-        _ => img,
-    };
+    let img = correct_orientation(img, input_path);
 
     let mut rgb = img.into_rgb8();
     apply_effect(&mut rgb, 0);
@@ -18,6 +12,15 @@ pub fn process(input_path: &str) -> String {
     let output_path = crate::utils::make_output_path(input_path);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
+}
+
+fn correct_orientation(img: image::DynamicImage, input_path: &str) -> image::DynamicImage {
+    match exif::read_orientation(input_path) {
+        3 => img.rotate180(),
+        6 => img.rotate90(),
+        8 => img.rotate270(),
+        _ => img,
+    }
 }
 
 pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
@@ -34,4 +37,3 @@ pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
         [1.0, 1.0],
     );
 }
-
