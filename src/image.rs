@@ -16,10 +16,10 @@ pub fn process(input_path: &str) -> String {
 
 fn correct_orientation(img: image::DynamicImage, input_path: &str) -> image::DynamicImage {
     match exif::read_orientation(input_path) {
-        3 => img.rotate180(),
-        6 => img.rotate90(),
-        8 => img.rotate270(),
-        _ => img,
+        exif::Orientation::Rotate180 => img.rotate180(),
+        exif::Orientation::Rotate90 => img.rotate90(),
+        exif::Orientation::Rotate270 => img.rotate270(),
+        exif::Orientation::Normal => img,
     }
 }
 
