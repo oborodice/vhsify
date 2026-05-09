@@ -6,13 +6,13 @@ use rayon::prelude::*;
 
 use crate::image as vhs_image;
 
-pub fn process(input_path: &str) -> String {
+pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode) -> String {
     init_thread_pool();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
     let (src_w, src_h, fps) = get_video_info(input_path);
-    extract_frames(input_path, frame_pattern_str, src_w, src_h);
+    extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode);
 
     let frames = collect_frames(&temp.dir);
     apply_effects_to_frames(&frames, &temp.progress);
@@ -74,17 +74,13 @@ fn get_video_info(input_path: &str) -> (u32, u32, String) {
     (width, height, fps)
 }
 
-fn extract_frames(input_path: &str, frame_pattern: &str, src_w: u32, src_h: u32) {
+fn extract_frames(input_path: &str, frame_pattern: &str, src_w: u32, src_h: u32, scale_mode: crate::utils::ScaleMode) {
     let (visible_w, target_h) = (640u32, 480u32);
     let scaled_w = src_w * target_h / src_h;
-    let video_filter = if scaled_w > visible_w {
-        let bar_w = (scaled_w - visible_w) / 2;
-        let right_x = scaled_w - bar_w;
-        let bar = |x: u32| format!("drawbox=x={x}:y=0:w={bar_w}:h={target_h}:color=black:t=fill");
-        format!("scale=-2:{target_h},{},{}", bar(0), bar(right_x))
+    let video_filter = if scaled_w > visible_w && matches!(scale_mode, crate::utils::ScaleMode::Crop) {
+        video_filter_crop(scaled_w, visible_w, target_h)
     } else {
-        let pad_x = (visible_w - scaled_w) / 2;
-        format!("scale=-2:{target_h},pad={visible_w}:{target_h}:{pad_x}:0:black")
+        video_filter_bars(scaled_w, visible_w, target_h)
     };
     Command::new("ffmpeg")
         .args(["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"])
@@ -113,22 +109,6 @@ fn apply_effects_to_frames(frames: &[PathBuf], progress_path: &Path) {
     });
     eprintln!();
     let _ = std::fs::write(progress_path, "audio processing...\n");
-}
-
-fn apply_effect_to_frame(frame_path: &PathBuf, frame_index: usize) {
-    let frame_str = frame_path.to_str().unwrap();
-    let mut rgb = image::open(frame_str).expect("Failed to open frame").into_rgb8();
-    vhs_image::apply_effect(&mut rgb, frame_index);
-    rgb.save(frame_str).expect("Failed to save frame");
-}
-
-fn report_progress(done: usize, total: usize, progress_path: &Path) {
-    let percentage = done * 100 / total;
-    if done % (total / 20).max(1) == 0 || done == total {
-        let status = format!("frames {}/{} ({}%)\n", done, total, percentage);
-        let _ = std::fs::write(progress_path, &status);
-        eprint!("\r{}", status.trim());
-    }
 }
 
 fn process_audio(input_path: &str, raw_wav: &Path, processed_wav: &Path) -> bool {
@@ -167,4 +147,37 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         .args(&args)
         .status()
         .expect("Failed to run ffmpeg");
+}
+
+fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
+    let crop_x = (scaled_w - visible_w) / 2;
+    format!("scale=-2:{target_h},crop={visible_w}:{target_h}:{crop_x}:0")
+}
+
+fn video_filter_bars(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
+    if scaled_w > visible_w {
+        let bar_w = (scaled_w - visible_w) / 2;
+        let right_x = scaled_w - bar_w;
+        let bar = |x: u32| format!("drawbox=x={x}:y=0:w={bar_w}:h={target_h}:color=black:t=fill");
+        format!("scale=-2:{target_h},{},{}", bar(0), bar(right_x))
+    } else {
+        let pad_x = (visible_w - scaled_w) / 2;
+        format!("scale=-2:{target_h},pad={visible_w}:{target_h}:{pad_x}:0:black")
+    }
+}
+
+fn apply_effect_to_frame(frame_path: &PathBuf, frame_index: usize) {
+    let frame_str = frame_path.to_str().unwrap();
+    let mut rgb = image::open(frame_str).expect("Failed to open frame").into_rgb8();
+    vhs_image::apply_effect(&mut rgb, frame_index);
+    rgb.save(frame_str).expect("Failed to save frame");
+}
+
+fn report_progress(done: usize, total: usize, progress_path: &Path) {
+    let percentage = done * 100 / total;
+    if done % (total / 20).max(1) == 0 || done == total {
+        let status = format!("frames {}/{} ({}%)\n", done, total, percentage);
+        let _ = std::fs::write(progress_path, &status);
+        eprint!("\r{}", status.trim());
+    }
 }

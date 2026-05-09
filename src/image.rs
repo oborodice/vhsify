@@ -2,10 +2,10 @@ use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 
 use crate::exif;
 
-pub fn process(input_path: &str) -> String {
+pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode) -> String {
     let img = image::open(input_path).expect("Failed to open image");
     let img = correct_orientation(img, input_path);
-    let img = scale_to_4_3(img);
+    let img = scale_to_4_3(img, scale_mode);
 
     let mut rgb = img.into_rgb8();
     apply_effect(&mut rgb, 0);
@@ -24,22 +24,15 @@ fn correct_orientation(img: image::DynamicImage, input_path: &str) -> image::Dyn
     }
 }
 
-fn scale_to_4_3(img: image::DynamicImage) -> image::DynamicImage {
+fn scale_to_4_3(img: image::DynamicImage, scale_mode: crate::utils::ScaleMode) -> image::DynamicImage {
     let (visible_w, target_h) = (640u32, 480u32);
     let scaled_w = ((img.width() as f32 * target_h as f32) / img.height() as f32).round() as u32;
     let scaled = img.resize_exact(scaled_w, target_h, image::imageops::FilterType::Lanczos3).into_rgb8();
-    let canvas_w = scaled_w.max(visible_w);
-    let mut canvas = image::RgbImage::new(canvas_w, target_h);
-    image::imageops::overlay(&mut canvas, &scaled, ((canvas_w - scaled_w) / 2) as i64, 0);
-    let bar_w = canvas_w.saturating_sub(visible_w) / 2;
-    let black = image::Rgb([0u8, 0, 0]);
-    for row in 0..target_h {
-        for col in 0..bar_w {
-            canvas.put_pixel(col, row, black);
-            canvas.put_pixel(canvas_w - 1 - col, row, black);
-        }
+    if scaled_w > visible_w && matches!(scale_mode, crate::utils::ScaleMode::Crop) {
+        apply_crop(scaled, scaled_w, visible_w, target_h)
+    } else {
+        apply_bars(scaled, scaled_w, visible_w, target_h)
     }
-    image::DynamicImage::from(canvas)
 }
 
 pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
@@ -55,4 +48,25 @@ pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
         frame_num,
         [1.0, 1.0],
     );
+}
+
+fn apply_crop(scaled: image::RgbImage, scaled_w: u32, visible_w: u32, target_h: u32) -> image::DynamicImage {
+    let x = (scaled_w - visible_w) / 2;
+    let cropped = image::imageops::crop_imm(&scaled, x, 0, visible_w, target_h).to_image();
+    image::DynamicImage::from(cropped)
+}
+
+fn apply_bars(scaled: image::RgbImage, scaled_w: u32, visible_w: u32, target_h: u32) -> image::DynamicImage {
+    let canvas_w = scaled_w.max(visible_w);
+    let mut canvas = image::RgbImage::new(canvas_w, target_h);
+    image::imageops::overlay(&mut canvas, &scaled, ((canvas_w - scaled_w) / 2) as i64, 0);
+    let bar_w = canvas_w.saturating_sub(visible_w) / 2;
+    let black = image::Rgb([0, 0, 0]);
+    for row in 0..target_h {
+        for col in 0..bar_w {
+            canvas.put_pixel(col, row, black);
+            canvas.put_pixel(canvas_w - 1 - col, row, black);
+        }
+    }
+    image::DynamicImage::from(canvas)
 }
