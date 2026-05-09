@@ -1,4 +1,4 @@
-pub fn read_orientation(path: &str) -> u32 {
+pub(crate) fn read_orientation(path: &str) -> u32 {
     let file = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return 1,
