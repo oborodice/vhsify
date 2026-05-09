@@ -33,10 +33,10 @@ fn scale_to_4_3(img: image::DynamicImage) -> image::DynamicImage {
     image::imageops::overlay(&mut canvas, &scaled, ((canvas_w - scaled_w) / 2) as i64, 0);
     let bar_w = canvas_w.saturating_sub(visible_w) / 2;
     let black = image::Rgb([0u8, 0, 0]);
-    for py in 0..target_h {
-        for px in 0..bar_w {
-            canvas.put_pixel(px, py, black);
-            canvas.put_pixel(canvas_w - 1 - px, py, black);
+    for row in 0..target_h {
+        for col in 0..bar_w {
+            canvas.put_pixel(col, row, black);
+            canvas.put_pixel(canvas_w - 1 - col, row, black);
         }
     }
     image::DynamicImage::from(canvas)
