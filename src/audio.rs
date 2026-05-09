@@ -1,6 +1,13 @@
 use std::process::Command;
 
-pub fn extract(input_path: &str, output_wav: &str) -> bool {
+const LOWPASS_CUTOFF_HZ: f32 = 8000.0;
+const HISS_AMPLITUDE: f32 = 0.002;
+const WOW_RATE_HZ: f32 = 0.7;
+const WOW_DEPTH_SAMPLES: f32 = 30.0;
+const FLUTTER_RATE_HZ: f32 = 7.0;
+const FLUTTER_DEPTH_SAMPLES: f32 = 5.0;
+
+pub(crate) fn extract(input_path: &str, output_wav: &str) -> bool {
     let status = Command::new("ffmpeg")
         .args([
             "-i", input_path,
@@ -23,22 +30,30 @@ pub fn extract(input_path: &str, output_wav: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn apply_effects(input_wav: &str, output_wav: &str) {
-    let mut reader = hound::WavReader::open(input_wav).expect("Failed to open WAV");
-    let spec = reader.spec();
+pub(crate) fn apply_effects(input_wav: &str, output_wav: &str) {
+    let (spec, samples) = read_wav(input_wav);
     let sample_rate = spec.sample_rate as f32;
     let channels = spec.channels as usize;
 
+    let samples = lowpass(samples, sample_rate, channels, LOWPASS_CUTOFF_HZ);
+    let samples = hiss(samples, HISS_AMPLITUDE);
+    let samples = wow_flutter(samples, sample_rate, channels);
+
+    write_wav(output_wav, spec, samples);
+}
+
+fn read_wav(path: &str) -> (hound::WavSpec, Vec<i16>) {
+    let mut reader = hound::WavReader::open(path).expect("Failed to open WAV");
+    let spec = reader.spec();
     let samples: Vec<i16> = reader
         .samples::<i16>()
         .map(|s| s.expect("Failed to read sample"))
         .collect();
+    (spec, samples)
+}
 
-    let samples = lowpass(samples, sample_rate, channels, 8000.0);
-    let samples = hiss(samples, 0.002);
-    let samples = wow_flutter(samples, sample_rate, channels);
-
-    let mut writer = hound::WavWriter::create(output_wav, spec).expect("Failed to create WAV");
+fn write_wav(path: &str, spec: hound::WavSpec, samples: Vec<i16>) {
+    let mut writer = hound::WavWriter::create(path, spec).expect("Failed to create WAV");
     for s in samples {
         writer.write_sample(s).expect("Failed to write sample");
     }
@@ -86,8 +101,8 @@ fn wow_flutter(samples: Vec<i16>, sample_rate: f32, channels: usize) -> Vec<i16>
 
     for out_frame in 0..num_frames {
         let t = out_frame as f32 / sample_rate;
-        // Wow: 0.7 Hz、深さ30サンプル; Flutter: 7 Hz、深さ5サンプル
-        let offset = 30.0 * (pi2 * 0.7 * t).sin() + 5.0 * (pi2 * 7.0 * t).sin();
+        let offset = WOW_DEPTH_SAMPLES * (pi2 * WOW_RATE_HZ * t).sin()
+            + FLUTTER_DEPTH_SAMPLES * (pi2 * FLUTTER_RATE_HZ * t).sin();
         let src = (out_frame as f32 + offset).clamp(0.0, (num_frames - 2) as f32);
         let i0 = src as usize;
         let frac = src - i0 as f32;
