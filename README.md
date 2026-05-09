@@ -2,6 +2,11 @@
 
 - 画像・映像をVHS風に変換するCLIツール
 
+## サポート形式
+
+- 画像: jpg, jpeg, png, webp, avif
+- 動画: mp4, mov, avi, mkv
+
 ## 依存ツール
 
 - Rust
@@ -26,6 +31,9 @@ $ cargo run --release -- <input>.<ext> --output-name <name>
 # [テスト用] samples/images/ 以下を一括処理して output/images/ に出力
 $ bash scripts/generate_samples.sh
 
-# [テスト用] output/images/ の生成物を削除
+# [テスト用] samples/sample.mp4 を各フォーマット・アスペクト比・モードで処理して output/videos/ に出力
+$ bash scripts/generate_videos.sh
+
+# [テスト用] output/ の生成物を削除
 $ bash scripts/clean_samples.sh
 ```
