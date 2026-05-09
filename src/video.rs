@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -6,29 +7,64 @@ use rayon::prelude::*;
 use crate::image as vhs_image;
 
 pub fn process(input_path: &str) -> String {
+    let temp = setup();
+    let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
+
+    extract_frames(input_path, frame_pattern_str);
+    let has_audio = crate::audio::extract(input_path, temp.raw_wav.to_str().unwrap());
+
+    let frames = collect_frames(&temp.dir);
+    apply_effects_to_frames(&frames);
+
+    if has_audio {
+        eprintln!("Processing audio...");
+        crate::audio::apply_effects(temp.raw_wav.to_str().unwrap(), temp.processed_wav.to_str().unwrap());
+    }
+
+    let fps = get_fps(input_path);
+    let output_path = crate::utils::make_output_path(input_path);
+    let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
+    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
+
+    std::fs::remove_dir_all(&temp.dir).ok();
+
+    output_path
+}
+
+struct TempPaths {
+    dir: PathBuf,
+    frame_pattern: PathBuf,
+    raw_wav: PathBuf,
+    processed_wav: PathBuf,
+}
+
+fn setup() -> TempPaths {
     rayon::ThreadPoolBuilder::new()
         .stack_size(8 * 1024 * 1024)
         .build_global()
         .ok();
-    let temp_dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
-    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+    let dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("Failed to create temp dir");
+    TempPaths {
+        frame_pattern: dir.join("frame_%05d.jpg"),
+        raw_wav: dir.join("audio_raw.wav"),
+        processed_wav: dir.join("audio_vhs.wav"),
+        dir,
+    }
+}
 
-    let frame_pattern = temp_dir.join("frame_%05d.jpg");
-    let frame_pattern_str = frame_pattern.to_str().unwrap();
-    let raw_wav = temp_dir.join("audio_raw.wav");
-    let processed_wav = temp_dir.join("audio_vhs.wav");
-
-    extract_frames(input_path, frame_pattern_str);
-    let has_audio = crate::audio::extract(input_path, raw_wav.to_str().unwrap());
-
-    let mut frames: Vec<_> = std::fs::read_dir(&temp_dir)
+fn collect_frames(temp_dir: &Path) -> Vec<PathBuf> {
+    let mut frames: Vec<_> = std::fs::read_dir(temp_dir)
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| p.extension().map(|e| e == "jpg").unwrap_or(false))
         .collect();
     frames.sort();
+    frames
+}
 
+fn apply_effects_to_frames(frames: &[PathBuf]) {
     let total = frames.len();
     let counter = AtomicUsize::new(0);
     frames.par_iter().enumerate().for_each(|(i, frame_path)| {
@@ -46,24 +82,6 @@ pub fn process(input_path: &str) -> String {
     });
     eprintln!();
     let _ = std::fs::write("/tmp/vhsify_progress.txt", "audio processing...\n");
-
-    if has_audio {
-        eprintln!("Processing audio...");
-        crate::audio::apply_effects(raw_wav.to_str().unwrap(), processed_wav.to_str().unwrap());
-    }
-
-    let fps = get_fps(input_path);
-    let output_path = crate::utils::make_output_path(input_path);
-    let audio_path = if has_audio {
-        Some(processed_wav.to_str().unwrap().to_string())
-    } else {
-        None
-    };
-    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
-
-    std::fs::remove_dir_all(&temp_dir).ok();
-
-    output_path
 }
 
 fn extract_frames(input_path: &str, frame_pattern: &str) {
