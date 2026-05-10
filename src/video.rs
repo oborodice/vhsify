@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use crate::image as vhs_image;
 
 pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>, output_name: Option<&str>) -> String {
+    check_ffmpeg();
     init_thread_pool();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
@@ -33,6 +34,13 @@ struct TempPaths {
     processed_wav: PathBuf,
     progress: PathBuf,
     dir: PathBuf,
+}
+
+fn check_ffmpeg() {
+    if Command::new("ffmpeg").arg("-version").output().is_err() {
+        eprintln!("Error: ffmpeg not found. Please install ffmpeg and try again.");
+        std::process::exit(1);
+    }
 }
 
 fn init_thread_pool() {
