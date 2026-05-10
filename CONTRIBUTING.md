@@ -27,7 +27,7 @@ $ bash scripts/clean_samples.sh
 ## Release
 
 ```bash
-$ git tag vX.X.X && git push origin vX.X.X
+$ bash scripts/release.sh X.X.X
 ```
 
-Pushing a tag triggers GitHub Actions to build binaries and attach them to a GitHub Release.
+Bumps the version in `Cargo.toml`, commits, and pushes the tag. GitHub Actions will then build binaries and attach them to a GitHub Release.
