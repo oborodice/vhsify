@@ -139,6 +139,7 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
 
     args.extend([
         "-pix_fmt".to_string(), "yuv420p".to_string(),
+        "-preset".to_string(), "ultrafast".to_string(),
         output_path.to_string(),
         "-y".to_string(),
     ]);
