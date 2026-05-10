@@ -1,0 +1,25 @@
+class Vhsify < Formula
+  desc "CLI tool to apply VHS effects to images and videos"
+  homepage "https://github.com/oborodice/vhsify"
+  version "{{VERSION}}"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/oborodice/vhsify/releases/download/v{{VERSION}}/vhsify-macos-aarch64.tar.gz"
+      sha256 "{{SHA_ARM}}"
+    end
+  end
+
+  on_linux do
+    on_intel do
+      url "https://github.com/oborodice/vhsify/releases/download/v{{VERSION}}/vhsify-linux-x86_64.tar.gz"
+      sha256 "{{SHA_LINUX}}"
+    end
+  end
+
+  depends_on "ffmpeg"
+
+  def install
+    bin.install "vhsify"
+  end
+end
