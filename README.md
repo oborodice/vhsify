@@ -1,35 +1,35 @@
 # vhsify
 
-- 画像・映像をVHS風に変換するCLIツール
+A CLI tool to apply VHS effects to images and videos.
 
-## サポート形式
+## Supported formats
 
-- 画像: jpg, jpeg, png, webp, avif
-- 動画: mp4, mov, avi, mkv
+- Images: JPEG, PNG, WebP, AVIF
+- Videos: MP4, MOV, AVI, MKV
 
-## インストール
+## Installation
 
-[GitHub Releases](https://github.com/oborodice/vhsify/releases) からバイナリをダウンロードして PATH に追加してください。
+Download the binary from [GitHub Releases](https://github.com/oborodice/vhsify/releases) and add it to your PATH.
 
-## 依存ツール
+## Requirements
 
-- ffmpeg
+- FFmpeg
 
-## 使い方
+## Usage
 
 ```bash
-# <input>_vhs.<ext> としてカレントディレクトリに出力
+# Output as <input>_vhs.<ext> in the current directory
 $ vhsify <input>.<ext>
 
-# --mode でワイドコンテンツの処理方法を指定（デフォルト: bars）
-$ vhsify <input>.<ext> --mode bars  # 左右を黒帯で埋めて4:3の見える範囲にする
-$ vhsify <input>.<ext> --mode crop  # 左右をクロップして4:3にする
+# --mode controls how wide content is handled (default: bars)
+$ vhsify <input>.<ext> --mode bars  # fit into 4:3 with black bars on the sides
+$ vhsify <input>.<ext> --mode crop  # crop sides to 4:3
 
-# --output-dir で出力先ディレクトリを指定
+# --output-dir specifies the output directory
 $ vhsify <input>.<ext> --output-dir <dir>
 
-# --output-name で出力ファイル名（拡張子なし）を指定
+# --output-name specifies the output filename (without extension)
 $ vhsify <input>.<ext> --output-name <name>
 ```
 
-開発者向けの情報は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+For development information, see [CONTRIBUTING.md](CONTRIBUTING.md).
