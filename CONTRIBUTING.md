@@ -30,4 +30,6 @@ $ bash scripts/clean_samples.sh
 $ bash scripts/release.sh X.X.X
 ```
 
-Bumps the version in `Cargo.toml`, commits, and pushes the tag. GitHub Actions will then build binaries and attach them to a GitHub Release.
+1. Bumps the version in `Cargo.toml` and commits
+1. Pushes the tag
+1. GitHub Actions builds binaries and attaches them to a GitHub Release
