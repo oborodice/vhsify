@@ -1,6 +1,6 @@
 # vhsify
 
-A CLI tool to apply VHS effects to images and videos.
+Fast VHS conversion for images and videos — scriptable and AI-workflow ready.
 
 | Before | After |
 |---|---|

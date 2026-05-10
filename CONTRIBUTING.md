@@ -3,7 +3,7 @@
 ## Requirements
 
 - Rust 1.85+
-- FFmpeg
+- [FFmpeg](https://ffmpeg.org/)
 
 ## Run
 
