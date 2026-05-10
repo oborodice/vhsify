@@ -137,9 +137,14 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         args.extend(["-map".to_string(), "0:v".to_string()]);
     }
 
+    if has_videotoolbox() {
+        args.extend(["-c:v".to_string(), "h264_videotoolbox".to_string()]);
+    } else {
+        args.extend(["-preset".to_string(), "ultrafast".to_string()]);
+    }
+
     args.extend([
         "-pix_fmt".to_string(), "yuv420p".to_string(),
-        "-preset".to_string(), "ultrafast".to_string(),
         output_path.to_string(),
         "-y".to_string(),
     ]);
@@ -148,6 +153,14 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         .args(&args)
         .status()
         .expect("Failed to run ffmpeg");
+}
+
+fn has_videotoolbox() -> bool {
+    Command::new("ffmpeg")
+        .args(["-encoders", "-v", "quiet"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_videotoolbox"))
+        .unwrap_or(false)
 }
 
 fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
