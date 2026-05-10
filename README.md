@@ -25,8 +25,8 @@ $ vhsify <input>.<ext>
 $ vhsify <input>.<ext> --mode bars  # 左右を黒帯で埋めて4:3の見える範囲にする
 $ vhsify <input>.<ext> --mode crop  # 左右をクロップして4:3にする
 
-# --output で出力先ディレクトリを指定
-$ vhsify <input>.<ext> --output <dir>
+# --output-dir で出力先ディレクトリを指定
+$ vhsify <input>.<ext> --output-dir <dir>
 
 # --output-name で出力ファイル名（拡張子なし）を指定
 $ vhsify <input>.<ext> --output-name <name>

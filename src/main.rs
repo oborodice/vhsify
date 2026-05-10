@@ -12,7 +12,7 @@ struct Args {
     #[arg(long, value_enum, default_value_t = utils::ScaleMode::Bars)]
     mode: utils::ScaleMode,
     #[arg(long)]
-    output: Option<String>,
+    output_dir: Option<String>,
     #[arg(long)]
     output_name: Option<String>,
 }
@@ -20,7 +20,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let input_path = &args.input;
-    let output_dir = args.output.as_deref();
+    let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
     let output_path = if is_image(input_path) {
