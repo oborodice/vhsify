@@ -125,24 +125,8 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         "-r".to_string(), fps.to_string(),
         "-i".to_string(), frame_pattern.to_string(),
     ];
-
-    if let Some(audio) = audio_path {
-        args.extend([
-            "-i".to_string(), audio.to_string(),
-            "-map".to_string(), "0:v".to_string(),
-            "-map".to_string(), "1:a".to_string(),
-            "-c:a".to_string(), "aac".to_string(),
-        ]);
-    } else {
-        args.extend(["-map".to_string(), "0:v".to_string()]);
-    }
-
-    if has_videotoolbox() {
-        args.extend(["-c:v".to_string(), "h264_videotoolbox".to_string()]);
-    } else {
-        args.extend(["-preset".to_string(), "ultrafast".to_string()]);
-    }
-
+    args.extend(audio_args(audio_path));
+    args.extend(encoder_args());
     args.extend([
         "-pix_fmt".to_string(), "yuv420p".to_string(),
         output_path.to_string(),
@@ -153,14 +137,6 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         .args(&args)
         .status()
         .expect("Failed to run ffmpeg");
-}
-
-fn has_videotoolbox() -> bool {
-    Command::new("ffmpeg")
-        .args(["-encoders", "-v", "quiet"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_videotoolbox"))
-        .unwrap_or(false)
 }
 
 fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
@@ -194,4 +170,33 @@ fn report_progress(done: usize, total: usize, progress_path: &Path) {
         let _ = std::fs::write(progress_path, &status);
         eprint!("\r{}", status.trim());
     }
+}
+
+fn audio_args(audio_path: Option<&str>) -> Vec<String> {
+    if let Some(audio) = audio_path {
+        vec![
+            "-i".to_string(), audio.to_string(),
+            "-map".to_string(), "0:v".to_string(),
+            "-map".to_string(), "1:a".to_string(),
+            "-c:a".to_string(), "aac".to_string(),
+        ]
+    } else {
+        vec!["-map".to_string(), "0:v".to_string()]
+    }
+}
+
+fn encoder_args() -> Vec<String> {
+    if has_videotoolbox() {
+        vec!["-c:v".to_string(), "h264_videotoolbox".to_string()]
+    } else {
+        vec!["-preset".to_string(), "ultrafast".to_string()]
+    }
+}
+
+fn has_videotoolbox() -> bool {
+    Command::new("ffmpeg")
+        .args(["-encoders", "-v", "quiet"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_videotoolbox"))
+        .unwrap_or(false)
 }
