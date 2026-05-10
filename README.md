@@ -2,6 +2,10 @@
 
 A CLI tool to apply VHS effects to images and videos.
 
+| Before | After |
+|---|---|
+| ![](docs/sample.gif) | ![](docs/sample_vhs.gif) |
+
 ## Supported formats
 
 - Images: JPEG, PNG, WebP, AVIF
