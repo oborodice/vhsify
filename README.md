@@ -36,4 +36,7 @@ $ bash scripts/generate_videos.sh
 
 # [テスト用] output/ の生成物を削除
 $ bash scripts/clean_samples.sh
+
+# タグを push すると GitHub Actions が自動ビルドし、GitHub Releases にバイナリを添付
+$ git tag vX.X.X && git push origin vX.X.X
 ```
