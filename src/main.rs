@@ -7,6 +7,7 @@ mod video;
 use clap::Parser;
 
 #[derive(Parser)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (ntsc-rs ", env!("NTSCRS_VERSION"), ")"))]
 struct Args {
     input: String,
     #[arg(long, value_enum, default_value_t = utils::ScaleMode::Bars)]
