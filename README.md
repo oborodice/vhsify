@@ -9,11 +9,18 @@ A CLI tool to apply VHS effects to images and videos.
 
 ## Installation
 
-Download the binary from [GitHub Releases](https://github.com/oborodice/vhsify/releases) and add it to your PATH.
+### Homebrew (macOS)
 
-## Requirements
+```bash
+$ brew tap oborodice/tap
+$ brew install vhsify
+```
 
-- FFmpeg
+### Manual
+
+1. Install [FFmpeg](https://ffmpeg.org/)
+1. Download the binary from [GitHub Releases](https://github.com/oborodice/vhsify/releases)
+1. Add it to your PATH
 
 ## Usage
 
@@ -32,4 +39,6 @@ $ vhsify <input>.<ext> --output-dir <dir>
 $ vhsify <input>.<ext> --output-name <name>
 ```
 
-For development information, see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
