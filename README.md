@@ -44,6 +44,9 @@ $ vhsify <input>.<ext> --output-name <name>
 
 # --version shows the version
 $ vhsify --version
+
+# --help shows usage
+$ vhsify --help
 ```
 
 ## Contributing

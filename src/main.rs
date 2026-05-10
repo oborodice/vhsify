@@ -9,12 +9,13 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(version = concat!(env!("CARGO_PKG_VERSION"), " (ntsc-rs ", env!("NTSCRS_VERSION"), ")"))]
 struct Args {
+    #[arg(help = "Input file (JPEG, PNG, WebP, AVIF, MP4, MOV, AVI, MKV)")]
     input: String,
-    #[arg(long, value_enum, default_value_t = utils::ScaleMode::Bars)]
+    #[arg(short, long, value_enum, default_value_t = utils::ScaleMode::Bars, help = "How to handle wide content: fit into 4:3 with black bars, or crop sides to 4:3")]
     mode: utils::ScaleMode,
-    #[arg(long)]
+    #[arg(short = 'd', long, help = "Output directory (default: same as input)")]
     output_dir: Option<String>,
-    #[arg(long)]
+    #[arg(short = 'n', long, help = "Output filename without extension (default: <input>_vhs)")]
     output_name: Option<String>,
 }
 
