@@ -10,6 +10,7 @@ if [ -z "$VERSION" ]; then
 fi
 
 perl -i -pe "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+cargo generate-lockfile
 git add Cargo.toml Cargo.lock
 git commit -m "chore: bump version to v$VERSION"
 git tag "v$VERSION"
