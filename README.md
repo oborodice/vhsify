@@ -41,6 +41,9 @@ $ vhsify <input>.<ext> --output-dir <dir>
 
 # --output-name specifies the output filename (without extension)
 $ vhsify <input>.<ext> --output-name <name>
+
+# --version shows the version
+$ vhsify --version
 ```
 
 ## Contributing
