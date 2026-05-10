@@ -810,7 +810,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 [[package]]
 name = "ntsc-rs"
 version = "0.1.2"
-source = "git+https://github.com/ntsc-rs/ntsc-rs#bddab2df789162391aa1981271a3d698a478f2e7"
+source = "git+https://github.com/ntsc-rs/ntsc-rs?tag=v0.9.4#add90f5bf1bf7e3c573e4e945a16f44a82941b51"
 dependencies = [
  "fearless_simd",
  "hifijson",
@@ -828,7 +828,7 @@ dependencies = [
 [[package]]
 name = "ntsc-rs-macros"
 version = "0.1.0"
-source = "git+https://github.com/ntsc-rs/ntsc-rs#bddab2df789162391aa1981271a3d698a478f2e7"
+source = "git+https://github.com/ntsc-rs/ntsc-rs?tag=v0.9.4#add90f5bf1bf7e3c573e4e945a16f44a82941b51"
 dependencies = [
  "proc-macro2",
  "quote",

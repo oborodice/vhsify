@@ -8,7 +8,7 @@ rust-version = "1.85"
 [dependencies]
 image = { version = "0.25.10", features = ["avif", "avif-native"] }
 kamadak-exif = "0.6.1"
-ntsc-rs = { git = "https://github.com/ntsc-rs/ntsc-rs" }
+ntsc-rs = { git = "https://github.com/ntsc-rs/ntsc-rs", tag = "v0.9.4" }
 rayon = "1.11.0"
 hound = "3.5.1"
 clap = { version = "4", features = ["derive"] }
