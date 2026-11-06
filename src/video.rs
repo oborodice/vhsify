@@ -6,7 +6,12 @@ use rayon::prelude::*;
 
 use crate::image as vhs_image;
 
-pub fn process(input_path: &str, scale_mode: crate::utils::ScaleMode, output_dir: Option<&str>, output_name: Option<&str>) -> String {
+pub fn process(
+    input_path: &str,
+    scale_mode: crate::utils::ScaleMode,
+    output_dir: Option<&str>,
+    output_name: Option<&str>,
+) -> String {
     check_ffmpeg();
     init_thread_pool();
     let temp = create_temp_dir();
@@ -65,10 +70,14 @@ fn create_temp_dir() -> TempPaths {
 fn get_video_info(input_path: &str) -> (u32, u32, String) {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,r_frame_rate",
-            "-of", "csv=p=0",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "csv=p=0",
             input_path,
         ])
         .output()
@@ -82,14 +91,21 @@ fn get_video_info(input_path: &str) -> (u32, u32, String) {
     (width, height, fps)
 }
 
-fn extract_frames(input_path: &str, frame_pattern: &str, src_w: u32, src_h: u32, scale_mode: crate::utils::ScaleMode) {
+fn extract_frames(
+    input_path: &str,
+    frame_pattern: &str,
+    src_w: u32,
+    src_h: u32,
+    scale_mode: crate::utils::ScaleMode,
+) {
     let (visible_w, target_h) = (640u32, 480u32);
     let scaled_w = src_w * target_h / src_h;
-    let video_filter = if scaled_w > visible_w && matches!(scale_mode, crate::utils::ScaleMode::Crop) {
-        video_filter_crop(scaled_w, visible_w, target_h)
-    } else {
-        video_filter_bars(scaled_w, visible_w, target_h)
-    };
+    let video_filter =
+        if scaled_w > visible_w && matches!(scale_mode, crate::utils::ScaleMode::Crop) {
+            video_filter_crop(scaled_w, visible_w, target_h)
+        } else {
+            video_filter_bars(scaled_w, visible_w, target_h)
+        };
     Command::new("ffmpeg")
         .args(["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"])
         .status()
@@ -130,13 +146,16 @@ fn process_audio(input_path: &str, raw_wav: &Path, processed_wav: &Path) -> bool
 
 fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Option<&str>) {
     let mut args = vec![
-        "-r".to_string(), fps.to_string(),
-        "-i".to_string(), frame_pattern.to_string(),
+        "-r".to_string(),
+        fps.to_string(),
+        "-i".to_string(),
+        frame_pattern.to_string(),
     ];
     args.extend(audio_args(audio_path));
     args.extend(encoder_args());
     args.extend([
-        "-pix_fmt".to_string(), "yuv420p".to_string(),
+        "-pix_fmt".to_string(),
+        "yuv420p".to_string(),
         output_path.to_string(),
         "-y".to_string(),
     ]);
@@ -166,7 +185,9 @@ fn video_filter_bars(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
 
 fn apply_effect_to_frame(frame_path: &PathBuf, frame_index: usize) {
     let frame_str = frame_path.to_str().unwrap();
-    let mut rgb = image::open(frame_str).expect("Failed to open frame").into_rgb8();
+    let mut rgb = image::open(frame_str)
+        .expect("Failed to open frame")
+        .into_rgb8();
     vhs_image::apply_effect(&mut rgb, frame_index);
     rgb.save(frame_str).expect("Failed to save frame");
 }
@@ -183,10 +204,14 @@ fn report_progress(done: usize, total: usize, progress_path: &Path) {
 fn audio_args(audio_path: Option<&str>) -> Vec<String> {
     if let Some(audio) = audio_path {
         vec![
-            "-i".to_string(), audio.to_string(),
-            "-map".to_string(), "0:v".to_string(),
-            "-map".to_string(), "1:a".to_string(),
-            "-c:a".to_string(), "aac".to_string(),
+            "-i".to_string(),
+            audio.to_string(),
+            "-map".to_string(),
+            "0:v".to_string(),
+            "-map".to_string(),
+            "1:a".to_string(),
+            "-c:a".to_string(),
+            "aac".to_string(),
         ]
     } else {
         vec!["-map".to_string(), "0:v".to_string()]
