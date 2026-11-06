@@ -3,10 +3,13 @@ use std::process::Command;
 pub(crate) fn extract(input_path: &str, output_wav: &str) -> bool {
     let status = Command::new("ffmpeg")
         .args([
-            "-i", input_path,
+            "-i",
+            input_path,
             "-vn",
-            "-acodec", "pcm_s16le",
-            "-ar", "44100",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "44100",
             output_wav,
             "-y",
         ])
@@ -80,12 +83,10 @@ fn hiss(mut samples: Vec<i16>, amplitude: f32) -> Vec<i16> {
     let lcg_multiplier: u64 = 6364136223846793005;
     let lcg_increment: u64 = 1442695040888963407;
     for sample in &mut samples {
-        rng = rng
-            .wrapping_mul(lcg_multiplier)
-            .wrapping_add(lcg_increment);
+        rng = rng.wrapping_mul(lcg_multiplier).wrapping_add(lcg_increment);
         let noise = (rng >> 33) as f32 / u32::MAX as f32 * 2.0 - 1.0;
-        *sample = (*sample as i32 + (noise * scale) as i32)
-            .clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        *sample = (*sample as i32 + (noise * scale) as i32).clamp(i16::MIN as i32, i16::MAX as i32)
+            as i16;
     }
     samples
 }
@@ -112,8 +113,9 @@ fn wow_flutter(samples: Vec<i16>, sample_rate: f32, channels: usize) -> Vec<i16>
         for channel in 0..channels {
             let sample_at = samples[src_index * channels + channel] as f32;
             let sample_next = samples[(src_index + 1) * channels + channel] as f32;
-            output[out_frame * channels + channel] =
-                (sample_at + frac * (sample_next - sample_at)).clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+            output[out_frame * channels + channel] = (sample_at + frac * (sample_next - sample_at))
+                .clamp(i16::MIN as f32, i16::MAX as f32)
+                as i16;
         }
     }
     output

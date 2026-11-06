@@ -15,7 +15,11 @@ struct Args {
     mode: utils::ScaleMode,
     #[arg(short = 'd', long, help = "Output directory (default: same as input)")]
     output_dir: Option<String>,
-    #[arg(short = 'n', long, help = "Output filename without extension (default: <input>_vhs)")]
+    #[arg(
+        short = 'n',
+        long,
+        help = "Output filename without extension (default: <input>_vhs)"
+    )]
     output_name: Option<String>,
 }
 
@@ -44,10 +48,7 @@ fn is_image(path: &str) -> bool {
 }
 
 fn is_video(path: &str) -> bool {
-    matches!(
-        file_extension(path).as_str(),
-        "mp4" | "mov" | "avi" | "mkv"
-    )
+    matches!(file_extension(path).as_str(), "mp4" | "mov" | "avi" | "mkv")
 }
 
 fn file_extension(path: &str) -> String {
