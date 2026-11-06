@@ -10,6 +10,7 @@
 
 ```bash
 $ mise install
+$ lefthook install
 ```
 
 ## Run

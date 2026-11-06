@@ -1,0 +1,15 @@
+pre-commit:
+  commands:
+    rustfmt:
+      glob: "*.rs"
+      run: cargo fmt -- {staged_files}
+      stage_fixed: true
+    clippy:
+      glob:
+        - "*.rs"
+        - "Cargo.toml"
+        - "Cargo.lock"
+      run: cargo clippy --all-targets -- -D warnings
+    actionlint:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: actionlint {staged_files}

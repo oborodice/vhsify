@@ -1,2 +1,3 @@
 [tools]
 actionlint = "latest"
+lefthook = "latest"
