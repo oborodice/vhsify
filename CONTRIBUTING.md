@@ -4,6 +4,13 @@
 
 - Rust 1.85+
 - [FFmpeg](https://ffmpeg.org/)
+- [mise](https://mise.jdx.dev/)
+
+## Setup
+
+```bash
+$ mise install
+```
 
 ## Run
 
