@@ -183,7 +183,7 @@ fn video_filter_bars(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
     }
 }
 
-fn apply_effect_to_frame(frame_path: &PathBuf, frame_index: usize) {
+fn apply_effect_to_frame(frame_path: &Path, frame_index: usize) {
     let frame_str = frame_path.to_str().unwrap();
     let mut rgb = image::open(frame_str)
         .expect("Failed to open frame")
