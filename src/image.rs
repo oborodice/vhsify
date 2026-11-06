@@ -49,10 +49,9 @@ pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {
     let (width, height) = rgb.dimensions();
     let mut effect = NtscEffect::default();
     effect.use_field = UseField::Both;
-    if let Some(scale) = effect.scale.as_mut() {
-        scale.scale_with_video_size = true;
-    }
+    effect.scale.settings.scale_with_video_size = true;
     effect.apply_effect_to_buffer::<Rgb, u8>(
+        ntsc_rs::ctx::global(),
         (width as usize, height as usize),
         rgb.as_mut(),
         frame_num,
