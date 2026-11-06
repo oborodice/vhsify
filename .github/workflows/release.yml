@@ -76,15 +76,17 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           curl -sL "https://github.com/oborodice/vhsify/releases/download/${VERSION}/vhsify-macos-aarch64.tar.gz" -o vhsify-macos-aarch64.tar.gz
           curl -sL "https://github.com/oborodice/vhsify/releases/download/${VERSION}/vhsify-linux-x86_64.tar.gz" -o vhsify-linux-x86_64.tar.gz
-          echo "SHA_ARM=$(sha256sum vhsify-macos-aarch64.tar.gz | awk '{print $1}')" >> $GITHUB_ENV
-          echo "SHA_LINUX=$(sha256sum vhsify-linux-x86_64.tar.gz | awk '{print $1}')" >> $GITHUB_ENV
-          echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
+          {
+            echo "SHA_ARM=$(sha256sum vhsify-macos-aarch64.tar.gz | awk '{print $1}')"
+            echo "SHA_LINUX=$(sha256sum vhsify-linux-x86_64.tar.gz | awk '{print $1}')"
+            echo "VERSION=${VERSION#v}"
+          } >> "$GITHUB_ENV"
 
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/oborodice/homebrew-tap.git
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/oborodice/homebrew-tap.git"
           python3 .github/homebrew/update_formula.py
           cd homebrew-tap
           git config user.email "github-actions@github.com"
