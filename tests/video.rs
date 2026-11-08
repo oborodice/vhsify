@@ -164,8 +164,12 @@ fn broken_video_fails_without_saving() {
     }
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("input.mp4"), "not a video").unwrap();
+    // Point the system temp dir here to check that vhsify cleans up its work dir on error
+    let temp_root = tmp.path().join("temp");
+    std::fs::create_dir(&temp_root).unwrap();
 
     let output = common::vhsify(tmp.path())
+        .env("TMPDIR", &temp_root)
         .arg("input.mp4")
         .output()
         .unwrap();
@@ -174,6 +178,80 @@ fn broken_video_fails_without_saving() {
     assert!(common::stderr(&output).contains("Failed to read video info: input.mp4"));
     assert!(common::stdout(&output).is_empty());
     assert!(!tmp.path().join("input_vhs.mp4").exists());
+    assert_eq!(std::fs::read_dir(&temp_root).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn unwritable_output_dir_fails_without_saving() {
+    use std::os::unix::fs::PermissionsExt;
+
+    if !ffmpeg_available() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.mp4");
+    write_video(&input, "white", 320, 240, false);
+    // Passes the existence check but makes the final encode fail after all frames are processed
+    let out_dir = tmp.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    std::fs::set_permissions(&out_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .arg(&input)
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Failed to write video"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn missing_ffmpeg_fails_with_message() {
+    let tmp = TempDir::new().unwrap();
+    // Input validation only checks that the file exists, so an empty file reaches the ffmpeg check
+    std::fs::write(tmp.path().join("input.mp4"), "").unwrap();
+    let empty_path = tmp.path().join("bin");
+    std::fs::create_dir(&empty_path).unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .env("PATH", &empty_path)
+        .arg("input.mp4")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("ffmpeg not found"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+#[ignore = "known bug: the layout uses the coded size from ffprobe, but ffmpeg decodes rotated frames"]
+fn video_with_rotation_metadata_is_padded_as_portrait() {
+    if !ffmpeg_available() {
+        return;
+    }
+    for mode in ["bars", "crop"] {
+        println!("mode: {mode}");
+        let tmp = TempDir::new().unwrap();
+        // Portrait phone videos are usually stored landscape with a 90 degree display rotation
+        let landscape = tmp.path().join("landscape.mp4");
+        write_video(&landscape, "white", 1920, 1080, false);
+        let input = tmp.path().join("input.mp4");
+        add_rotation(&landscape, &input, 90);
+
+        let output = common::run(tmp.path(), &input, &["--mode", mode]);
+
+        // The rotated 1080x1920 frames scale to 270x480 and are centered with 185px bars
+        assert_eq!(probe(&output).size(), (640, 480));
+        let frame = first_frame(&output);
+        assert_black(&frame, 0..179);
+        assert_white(&frame, 191..449);
+        assert_black(&frame, 461..640);
+    }
 }
 
 #[test]
@@ -269,6 +347,20 @@ fn write_video(path: &Path, color: &str, width: u32, height: u32, with_audio: bo
 
     let output = command.output().unwrap();
     assert!(output.status.success(), "{}", common::stderr(&output));
+}
+
+#[track_caller]
+fn add_rotation(input: &Path, output: &Path, degrees: u32) {
+    let result = Command::new("ffmpeg")
+        .args(["-loglevel", "error", "-display_rotation"])
+        .arg(degrees.to_string())
+        .arg("-i")
+        .arg(input)
+        .args(["-c", "copy", "-y"])
+        .arg(output)
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{}", common::stderr(&result));
 }
 
 /// Decodes the first frame through ffmpeg, which converts the limited YUV range to full-range RGB
