@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -51,7 +52,7 @@ impl Drop for TempDir {
 
 fn check_ffmpeg() -> Result<(), String> {
     if Command::new("ffmpeg").arg("-version").output().is_err() {
-        return Err("Error: ffmpeg not found. Please install ffmpeg and try again.".to_string());
+        return Err("ffmpeg not found. Please install ffmpeg and try again.".to_string());
     }
     Ok(())
 }
@@ -124,14 +125,10 @@ fn extract_frames(
         } else {
             video_filter_bars(scaled_w, visible_w, target_h)
         };
-    let status = Command::new("ffmpeg")
-        .args(["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"])
-        .status()
-        .expect("Failed to run ffmpeg");
-    if !status.success() {
-        return Err(format!("Failed to extract frames: {}", input_path));
-    }
-    Ok(())
+    run_ffmpeg(
+        &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
+        format!("Failed to extract frames: {}", input_path),
+    )
 }
 
 fn collect_frames(temp_dir: &Path) -> Vec<PathBuf> {
@@ -187,14 +184,15 @@ fn reassemble(
         "-y".to_string(),
     ]);
 
+    run_ffmpeg(&args, format!("Failed to write video: {}", output_path))
+}
+
+fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> {
     let status = Command::new("ffmpeg")
-        .args(&args)
+        .args(args)
         .status()
         .expect("Failed to run ffmpeg");
-    if !status.success() {
-        return Err(format!("Failed to write video: {}", output_path));
-    }
-    Ok(())
+    if status.success() { Ok(()) } else { Err(error) }
 }
 
 fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
