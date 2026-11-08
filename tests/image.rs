@@ -13,6 +13,10 @@ const WHITE_MIN: f64 = 200.0;
 // Measured std dev of luma on a flat gray image is about 8 with the effect and 0 without it.
 const NOISE_STD_DEV_MIN: f64 = 2.0;
 
+// Columns holding the image content in 640x480 output: full width for landscape, between bars for portrait
+const LANDSCAPE: Range<u32> = 0..640;
+const PORTRAIT: Range<u32> = 140..500;
+
 #[test]
 fn wide_image_keeps_scaled_width_and_covers_sides_with_bars_by_default() {
     for mode_args in [&[][..], &["--mode", "bars"][..]] {
@@ -74,45 +78,41 @@ fn square_image_is_padded_with_bars() {
     assert_black(&output, 566..640);
 }
 
+// EXIF tests convert a 640x480 JPEG whose top-left quadrant is white and check where that quadrant ends up.
+// Rotated images become 480x640, which scales to 360x480 between 140px bars.
+
 #[test]
 fn exif_orientation_normal_keeps_image_as_is() {
     let output = convert_with_orientation(1);
 
     assert_eq!(output.dimensions(), (640, 480));
-    assert_white_area(&output, 4..636, 4..236);
-    assert_black_area(&output, 4..636, 244..476);
+    assert_white_corner(&output, LANDSCAPE, Corner::TopLeft);
 }
 
 #[test]
-fn exif_orientation_rotate_180_flips_image() {
+fn exif_orientation_rotate_180_turns_image_upside_down() {
     let output = convert_with_orientation(3);
 
     assert_eq!(output.dimensions(), (640, 480));
-    assert_black_area(&output, 4..636, 4..236);
-    assert_white_area(&output, 4..636, 244..476);
+    assert_white_corner(&output, LANDSCAPE, Corner::BottomRight);
 }
 
 #[test]
-fn exif_orientation_rotate_90_turns_top_to_right() {
+fn exif_orientation_rotate_90_moves_top_left_to_top_right() {
     let output = convert_with_orientation(6);
 
-    // The rotated 480x640 image scales to 360x480 between 140px bars
     assert_eq!(output.dimensions(), (640, 480));
-    assert_black(&output, 0..134);
-    assert_black_area(&output, 146..316, 0..480);
-    assert_white_area(&output, 324..494, 0..480);
-    assert_black(&output, 506..640);
+    assert_portrait_bars(&output);
+    assert_white_corner(&output, PORTRAIT, Corner::TopRight);
 }
 
 #[test]
-fn exif_orientation_rotate_270_turns_top_to_left() {
+fn exif_orientation_rotate_270_moves_top_left_to_bottom_left() {
     let output = convert_with_orientation(8);
 
     assert_eq!(output.dimensions(), (640, 480));
-    assert_black(&output, 0..134);
-    assert_white_area(&output, 146..316, 0..480);
-    assert_black_area(&output, 324..494, 0..480);
-    assert_black(&output, 506..640);
+    assert_portrait_bars(&output);
+    assert_white_corner(&output, PORTRAIT, Corner::BottomLeft);
 }
 
 #[test]
@@ -169,13 +169,13 @@ fn assert_format_is_kept(ext: &str) {
     assert_eq!(image::image_dimensions(&output_path).unwrap(), (640, 480));
 }
 
-/// Converts a 640x480 JPEG whose top half is white and bottom half is black, tagged with the given EXIF orientation
+/// Converts a 640x480 JPEG whose top-left quadrant is white and the rest is black, tagged with the given EXIF orientation
 #[track_caller]
 fn convert_with_orientation(orientation: u16) -> GrayImage {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.jpg");
-    let img = RgbImage::from_fn(640, 480, |_, y| {
-        if y < 240 {
+    let img = RgbImage::from_fn(640, 480, |x, y| {
+        if x < 320 && y < 240 {
             Rgb([255, 255, 255])
         } else {
             Rgb([0, 0, 0])
@@ -237,6 +237,46 @@ fn run(cwd: &Path, input: &Path, args: &[&str]) -> PathBuf {
         .strip_prefix("Saved: ")
         .unwrap_or_else(|| panic!("unexpected stdout: {stdout}"));
     PathBuf::from(path)
+}
+
+#[derive(PartialEq)]
+enum Corner {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Checks that only the given quadrant of the content columns is white and the other three are black
+#[track_caller]
+fn assert_white_corner(img: &GrayImage, content: Range<u32>, white: Corner) {
+    // Stay away from the quadrant edges, where the VHS effect blurs white into black
+    let margin = 6;
+    let mid_x = (content.start + content.end) / 2;
+    let mid_y = img.height() / 2;
+    let left = content.start + margin..mid_x - margin;
+    let right = mid_x + margin..content.end - margin;
+    let top = margin..mid_y - margin;
+    let bottom = mid_y + margin..img.height() - margin;
+
+    for (corner, columns, rows) in [
+        (Corner::TopLeft, left.clone(), top.clone()),
+        (Corner::TopRight, right.clone(), top),
+        (Corner::BottomLeft, left, bottom.clone()),
+        (Corner::BottomRight, right, bottom),
+    ] {
+        if corner == white {
+            assert_white_area(img, columns, rows);
+        } else {
+            assert_black_area(img, columns, rows);
+        }
+    }
+}
+
+#[track_caller]
+fn assert_portrait_bars(img: &GrayImage) {
+    assert_black(img, 0..134);
+    assert_black(img, 506..640);
 }
 
 #[track_caller]
