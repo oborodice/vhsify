@@ -29,13 +29,23 @@ fn main() {
     let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
-    let output_path = if is_image(input_path) {
-        image::process(input_path, args.mode, output_dir, output_name)
-    } else if is_video(input_path) {
-        video::process(input_path, args.mode, output_dir, output_name)
-    } else {
+    if !is_image(input_path) && !is_video(input_path) {
         eprintln!("Unsupported file type: {}", input_path);
         std::process::exit(1);
+    }
+    if !std::path::Path::new(input_path).is_file() {
+        eprintln!("Input file not found: {}", input_path);
+        std::process::exit(1);
+    }
+    if let Some(dir) = output_dir.filter(|dir| !std::path::Path::new(dir).is_dir()) {
+        eprintln!("Output directory not found: {}", dir);
+        std::process::exit(1);
+    }
+
+    let output_path = if is_image(input_path) {
+        image::process(input_path, args.mode, output_dir, output_name)
+    } else {
+        video::process(input_path, args.mode, output_dir, output_name)
     };
     println!("Saved: {}", output_path);
 }

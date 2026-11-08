@@ -48,6 +48,63 @@ fn missing_extension_fails() {
 }
 
 #[test]
+fn missing_image_input_fails() {
+    let tmp = TempDir::new().unwrap();
+    let output = common::vhsify(tmp.path())
+        .arg("missing.png")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Input file not found: missing.png"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn missing_video_input_fails() {
+    let tmp = TempDir::new().unwrap();
+    let output = common::vhsify(tmp.path())
+        .arg("missing.mp4")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Input file not found: missing.mp4"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn missing_output_dir_fails() {
+    let tmp = TempDir::new().unwrap();
+    common::write_png(&tmp.path().join("input.png"), 64, 48);
+
+    let output = common::vhsify(tmp.path())
+        .args(["input.png", "--output-dir", "missing"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Output directory not found: missing"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn output_dir_that_is_a_file_fails() {
+    let tmp = TempDir::new().unwrap();
+    common::write_png(&tmp.path().join("input.png"), 64, 48);
+    std::fs::write(tmp.path().join("file"), "").unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .args(["input.png", "--output-dir", "file"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Output directory not found: file"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
 fn extension_is_case_insensitive() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.PNG");
