@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: (rng >> 33) / u32::MAX only reaches 0.5, so the noise is always negative"]
+    #[ignore = "known bug (#30): (rng >> 33) / u32::MAX only reaches 0.5, so the noise is always negative"]
     fn hiss_noise_is_centered_on_zero() {
         let output = hiss(vec![0; FRAMES], 0.002);
 
@@ -186,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: num_frames - 2 underflows when the audio has fewer than two frames"]
+    #[ignore = "known bug (#31): num_frames - 2 underflows when the audio has fewer than two frames"]
     fn wow_flutter_handles_a_single_frame() {
         let output = wow_flutter(vec![1000, -1000], SAMPLE_RATE, 2);
 
