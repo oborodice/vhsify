@@ -14,8 +14,8 @@ const WHITE_MIN: f64 = 200.0;
 const NOISE_STD_DEV_MIN: f64 = 2.0;
 
 // Columns holding the image content in 640x480 output: full width for landscape, between bars for portrait
-const LANDSCAPE: Range<u32> = 0..640;
-const PORTRAIT: Range<u32> = 140..500;
+const LANDSCAPE_COLUMNS: Range<u32> = 0..640;
+const PORTRAIT_COLUMNS: Range<u32> = 140..500;
 
 #[test]
 fn wide_image_keeps_scaled_width_and_covers_sides_with_bars_by_default() {
@@ -61,9 +61,8 @@ fn tall_image_is_padded_with_bars_in_any_mode() {
 
         // 480x640 scales to 360x480 and is centered with 140px bars
         assert_eq!(output.dimensions(), (640, 480));
-        assert_black(&output, 0..134);
+        assert_portrait_bars(&output);
         assert_white(&output, 146..494);
-        assert_black(&output, 506..640);
     }
 }
 
@@ -86,7 +85,23 @@ fn exif_orientation_normal_keeps_image_as_is() {
     let output = convert_with_orientation(1);
 
     assert_eq!(output.dimensions(), (640, 480));
-    assert_white_corner(&output, LANDSCAPE, Corner::TopLeft);
+    assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopLeft);
+}
+
+#[test]
+fn exif_orientation_invalid_value_keeps_image_as_is() {
+    let output = convert_with_orientation(9);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopLeft);
+}
+
+#[test]
+fn exif_orientation_flip_horizontal_moves_top_left_to_top_right() {
+    let output = convert_with_orientation(2);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopRight);
 }
 
 #[test]
@@ -94,7 +109,24 @@ fn exif_orientation_rotate_180_turns_image_upside_down() {
     let output = convert_with_orientation(3);
 
     assert_eq!(output.dimensions(), (640, 480));
-    assert_white_corner(&output, LANDSCAPE, Corner::BottomRight);
+    assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::BottomRight);
+}
+
+#[test]
+fn exif_orientation_flip_vertical_moves_top_left_to_bottom_left() {
+    let output = convert_with_orientation(4);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::BottomLeft);
+}
+
+#[test]
+fn exif_orientation_rotate_90_flip_horizontal_keeps_top_left_in_portrait() {
+    let output = convert_with_orientation(5);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_portrait_bars(&output);
+    assert_white_corner(&output, PORTRAIT_COLUMNS, Corner::TopLeft);
 }
 
 #[test]
@@ -103,7 +135,16 @@ fn exif_orientation_rotate_90_moves_top_left_to_top_right() {
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
-    assert_white_corner(&output, PORTRAIT, Corner::TopRight);
+    assert_white_corner(&output, PORTRAIT_COLUMNS, Corner::TopRight);
+}
+
+#[test]
+fn exif_orientation_rotate_270_flip_horizontal_moves_top_left_to_bottom_right() {
+    let output = convert_with_orientation(7);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_portrait_bars(&output);
+    assert_white_corner(&output, PORTRAIT_COLUMNS, Corner::BottomRight);
 }
 
 #[test]
@@ -112,7 +153,7 @@ fn exif_orientation_rotate_270_moves_top_left_to_bottom_left() {
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
-    assert_white_corner(&output, PORTRAIT, Corner::BottomLeft);
+    assert_white_corner(&output, PORTRAIT_COLUMNS, Corner::BottomLeft);
 }
 
 #[test]

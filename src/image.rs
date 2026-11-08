@@ -8,8 +8,8 @@ pub fn process(
     output_dir: Option<&str>,
     output_name: Option<&str>,
 ) -> String {
-    let img = image::open(input_path).expect("Failed to open image");
-    let img = correct_orientation(img, input_path);
+    let mut img = image::open(input_path).expect("Failed to open image");
+    img.apply_orientation(exif::read_orientation(input_path));
     let img = scale_to_4_3(img, scale_mode);
 
     let mut rgb = img.into_rgb8();
@@ -18,15 +18,6 @@ pub fn process(
     let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
-}
-
-fn correct_orientation(img: image::DynamicImage, input_path: &str) -> image::DynamicImage {
-    match exif::read_orientation(input_path) {
-        exif::Orientation::Rotate180 => img.rotate180(),
-        exif::Orientation::Rotate90 => img.rotate90(),
-        exif::Orientation::Rotate270 => img.rotate270(),
-        exif::Orientation::Normal => img,
-    }
 }
 
 fn scale_to_4_3(

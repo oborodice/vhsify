@@ -1,28 +1,17 @@
-pub(crate) enum Orientation {
-    Normal,
-    Rotate180,
-    Rotate90,
-    Rotate270,
-}
+use image::metadata::Orientation;
 
 pub(crate) fn read_orientation(path: &str) -> Orientation {
-    let file = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return Orientation::Normal,
-    };
-    let mut bufreader = std::io::BufReader::new(file);
-    let exifreader = exif::Reader::new();
-    let Ok(exif) = exifreader.read_from_container(&mut bufreader) else {
-        return Orientation::Normal;
-    };
-    match exif
-        .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
-        .and_then(|f| f.value.get_uint(0))
-        .unwrap_or(1)
-    {
-        3 => Orientation::Rotate180,
-        6 => Orientation::Rotate90,
-        8 => Orientation::Rotate270,
-        _ => Orientation::Normal,
-    }
+    exif_orientation(path).unwrap_or(Orientation::NoTransforms)
+}
+
+fn exif_orientation(path: &str) -> Option<Orientation> {
+    let file = std::fs::File::open(path).ok()?;
+    let exif = exif::Reader::new()
+        .read_from_container(&mut std::io::BufReader::new(file))
+        .ok()?;
+    let value = exif
+        .get_field(exif::Tag::Orientation, exif::In::PRIMARY)?
+        .value
+        .get_uint(0)?;
+    Orientation::from_exif(u8::try_from(value).ok()?)
 }
