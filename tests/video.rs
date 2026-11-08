@@ -120,7 +120,7 @@ fn square_video_is_padded_with_bars() {
 #[test]
 fn wide_video_has_same_width_as_image() {
     require_ffmpeg!();
-    // 1920x1080 gives 853.3 and 1282x720 gives 854.7, which used to round differently for images and videos
+    // 1920x1080 gives 853.3 and 1282x720 gives 854.7, so both rounding directions must agree
     for (width, height) in [(1920, 1080), (1282, 720)] {
         println!("input: {width}x{height}");
         let tmp = TempDir::new().unwrap();

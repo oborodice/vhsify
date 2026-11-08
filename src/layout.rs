@@ -11,9 +11,12 @@ pub(crate) enum ScaleMode {
 /// nearest even number. Videos are encoded as yuv420p, which needs an even width, and an even width
 /// also leaves an even excess so that bars and crops split evenly on both sides.
 pub(crate) fn scaled_width(width: u32, height: u32) -> u32 {
-    let half = u64::from(width) * u64::from(TARGET_HEIGHT / 2);
-    let half = (2 * half + u64::from(height)) / (2 * u64::from(height));
-    (half * 2) as u32
+    // The scaled width is width * TARGET_HEIGHT / height. Halving it, rounding half up and doubling
+    // gives the nearest even number.
+    let numerator = u64::from(width) * u64::from(TARGET_HEIGHT);
+    let denominator = 2 * u64::from(height);
+    let pairs = (numerator + denominator / 2) / denominator;
+    (pairs * 2) as u32
 }
 
 /// Where content scaled to `TARGET_HEIGHT` goes in the output
@@ -30,6 +33,10 @@ pub(crate) enum Layout {
 impl Layout {
     /// `scaled_width` is expected to come from [`scaled_width`], so it is even
     pub(crate) fn new(scaled_width: u32, mode: ScaleMode) -> Self {
+        debug_assert!(
+            scaled_width % 2 == 0,
+            "scaled width must be even, got {scaled_width}"
+        );
         if scaled_width <= TARGET_WIDTH {
             return Layout::Pad {
                 x: (TARGET_WIDTH - scaled_width) / 2,
