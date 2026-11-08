@@ -115,7 +115,7 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
         .unwrap_or(0.0);
 
     // ffprobe reports the stored size, but ffmpeg rotates the decoded frames, so a quarter turn swaps the sides
-    let quarter_turn = (rotation.round() as i64).rem_euclid(180) == 90;
+    let quarter_turn = matches!((rotation.round() as i64).rem_euclid(360), 90 | 270);
     let (width, height) = if quarter_turn {
         (height, width)
     } else {
