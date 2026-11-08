@@ -22,6 +22,12 @@ $ cargo run --release -- <input>.<ext>
 ## Test
 
 ```bash
+$ cargo test
+```
+
+### Manual check
+
+```bash
 # Process all files under samples/images/ and output to output/images/
 $ bash scripts/generate_samples.sh
 

@@ -12,3 +12,6 @@ ntsc-rs = { git = "https://github.com/ntsc-rs/ntsc-rs", tag = "v0.9.7" }
 rayon = "1.11.0"
 hound = "3.5.1"
 clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
