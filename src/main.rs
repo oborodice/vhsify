@@ -1,6 +1,6 @@
 mod audio;
-mod exif;
 mod image;
+mod orientation;
 mod utils;
 mod video;
 

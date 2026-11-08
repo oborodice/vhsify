@@ -1,6 +1,6 @@
 use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 
-use crate::exif;
+use crate::orientation;
 
 pub fn process(
     input_path: &str,
@@ -9,7 +9,7 @@ pub fn process(
     output_name: Option<&str>,
 ) -> String {
     let mut img = image::open(input_path).expect("Failed to open image");
-    if let Some(orientation) = exif::read_orientation(input_path) {
+    if let Some(orientation) = orientation::read(input_path) {
         img.apply_orientation(orientation);
     }
     let img = scale_to_4_3(img, scale_mode);
