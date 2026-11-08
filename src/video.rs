@@ -31,7 +31,7 @@ pub fn process(
     output_path
 }
 
-struct TempPaths {
+struct TempDir {
     frame_pattern: PathBuf,
     raw_wav: PathBuf,
     processed_wav: PathBuf,
@@ -40,7 +40,7 @@ struct TempPaths {
 }
 
 // panic で処理が中断されたときも一時ディレクトリを削除する
-impl Drop for TempPaths {
+impl Drop for TempDir {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.dir).ok();
     }
@@ -60,10 +60,10 @@ fn init_thread_pool() {
         .ok();
 }
 
-fn create_temp_dir() -> TempPaths {
+fn create_temp_dir() -> TempDir {
     let dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("Failed to create temp dir");
-    TempPaths {
+    TempDir {
         frame_pattern: dir.join("frame_%05d.jpg"),
         raw_wav: dir.join("audio_raw.wav"),
         processed_wav: dir.join("audio_vhs.wav"),
