@@ -28,17 +28,22 @@ pub fn process(
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
 
-    std::fs::remove_dir_all(&temp.dir).ok();
-
     output_path
 }
 
-struct TempPaths {
+struct TempDir {
     frame_pattern: PathBuf,
     raw_wav: PathBuf,
     processed_wav: PathBuf,
     progress: PathBuf,
     dir: PathBuf,
+}
+
+// panic で処理が中断されたときも一時ディレクトリを削除する
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.dir).ok();
+    }
 }
 
 fn check_ffmpeg() {
@@ -55,10 +60,10 @@ fn init_thread_pool() {
         .ok();
 }
 
-fn create_temp_dir() -> TempPaths {
+fn create_temp_dir() -> TempDir {
     let dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("Failed to create temp dir");
-    TempPaths {
+    TempDir {
         frame_pattern: dir.join("frame_%05d.jpg"),
         raw_wav: dir.join("audio_raw.wav"),
         processed_wav: dir.join("audio_vhs.wav"),
