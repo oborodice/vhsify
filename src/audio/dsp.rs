@@ -141,6 +141,18 @@ mod tests {
     }
 
     #[test]
+    fn hiss_does_not_wrap_around_at_the_sample_limits() {
+        let amplitude = 0.002;
+        let max_noise = (amplitude * i16::MAX as f32).ceil() as i16;
+
+        let loudest = hiss(vec![i16::MAX; FRAMES], amplitude);
+        let quietest = hiss(vec![i16::MIN; FRAMES], amplitude);
+
+        assert!(loudest.iter().all(|&s| s >= i16::MAX - max_noise));
+        assert!(quietest.iter().all(|&s| s <= i16::MIN + max_noise));
+    }
+
+    #[test]
     fn hiss_is_deterministic() {
         let input = sine(440.0, 10000.0);
 
@@ -167,6 +179,24 @@ mod tests {
         let output = wow_flutter(stereo.clone(), SAMPLE_RATE, 2);
 
         assert_eq!(output.len(), stereo.len());
+    }
+
+    #[test]
+    fn wow_flutter_reads_nearby_frames_within_its_depth() {
+        // Each sample holds its own frame index, so the output shows how far each frame was read from
+        let ramp: Vec<i16> = (0..FRAMES as i16).collect();
+        // Wow depth (30) plus flutter depth (5), plus one for the truncation to i16
+        let max_shift = 36;
+
+        let output = wow_flutter(ramp, SAMPLE_RATE, 1);
+
+        let shifts: Vec<i32> = output
+            .iter()
+            .enumerate()
+            .map(|(frame, &s)| i32::from(s) - frame as i32)
+            .collect();
+        assert!(shifts.iter().any(|&shift| shift.abs() >= 2));
+        assert!(shifts.iter().all(|&shift| shift.abs() <= max_shift));
     }
 
     #[test]
