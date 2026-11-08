@@ -9,7 +9,9 @@ pub fn process(
     output_name: Option<&str>,
 ) -> String {
     let mut img = image::open(input_path).expect("Failed to open image");
-    img.apply_orientation(exif::read_orientation(input_path));
+    if let Some(orientation) = exif::read_orientation(input_path) {
+        img.apply_orientation(orientation);
+    }
     let img = scale_to_4_3(img, scale_mode);
 
     let mut rgb = img.into_rgb8();

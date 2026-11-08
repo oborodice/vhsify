@@ -1,10 +1,6 @@
 use image::metadata::Orientation;
 
-pub(crate) fn read_orientation(path: &str) -> Orientation {
-    exif_orientation(path).unwrap_or(Orientation::NoTransforms)
-}
-
-fn exif_orientation(path: &str) -> Option<Orientation> {
+pub(crate) fn read_orientation(path: &str) -> Option<Orientation> {
     let file = std::fs::File::open(path).ok()?;
     let exif = exif::Reader::new()
         .read_from_container(&mut std::io::BufReader::new(file))
