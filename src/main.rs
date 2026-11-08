@@ -4,6 +4,8 @@ mod image;
 mod utils;
 mod video;
 
+use std::path::Path;
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -29,30 +31,44 @@ fn main() {
     let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
-    let output_path = if is_image(input_path) {
-        image::process(input_path, args.mode, output_dir, output_name)
-    } else if is_video(input_path) {
-        video::process(input_path, args.mode, output_dir, output_name)
-    } else {
-        eprintln!("Unsupported file type: {}", input_path);
+    let media = validate(input_path, output_dir).unwrap_or_else(|message| {
+        eprintln!("{}", message);
         std::process::exit(1);
+    });
+    let output_path = match media {
+        Media::Image => image::process(input_path, args.mode, output_dir, output_name),
+        Media::Video => video::process(input_path, args.mode, output_dir, output_name),
     };
     println!("Saved: {}", output_path);
 }
 
-fn is_image(path: &str) -> bool {
-    matches!(
-        file_extension(path).as_str(),
-        "jpg" | "jpeg" | "png" | "webp" | "avif"
-    )
+enum Media {
+    Image,
+    Video,
 }
 
-fn is_video(path: &str) -> bool {
-    matches!(file_extension(path).as_str(), "mp4" | "mov" | "avi" | "mkv")
+fn validate(input_path: &str, output_dir: Option<&str>) -> Result<Media, String> {
+    let media =
+        media_type(input_path).ok_or_else(|| format!("Unsupported file type: {}", input_path))?;
+    if !Path::new(input_path).is_file() {
+        return Err(format!("Input file not found: {}", input_path));
+    }
+    if let Some(dir) = output_dir.filter(|dir| !Path::new(dir).is_dir()) {
+        return Err(format!("Output directory not found: {}", dir));
+    }
+    Ok(media)
+}
+
+fn media_type(path: &str) -> Option<Media> {
+    match file_extension(path).as_str() {
+        "jpg" | "jpeg" | "png" | "webp" | "avif" => Some(Media::Image),
+        "mp4" | "mov" | "avi" | "mkv" => Some(Media::Video),
+        _ => None,
+    }
 }
 
 fn file_extension(path: &str) -> String {
-    std::path::Path::new(path)
+    Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
