@@ -151,7 +151,7 @@ fn output_defaults_to_input_directory() {
 }
 
 #[test]
-fn output_defaults_to_current_directory_for_bare_filename() {
+fn output_defaults_to_input_directory_for_bare_filename() {
     let tmp = TempDir::new().unwrap();
     common::write_png(&tmp.path().join("input.png"), 64, 48);
 
