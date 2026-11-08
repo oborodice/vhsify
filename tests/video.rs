@@ -191,6 +191,29 @@ fn broken_video_fails_without_saving() {
     assert_eq!(std::fs::read_dir(&temp_root).unwrap().count(), 0);
 }
 
+#[test]
+fn audio_only_file_fails_without_saving() {
+    require_ffmpeg!();
+    let tmp = TempDir::new().unwrap();
+    // ffprobe succeeds but reports no video stream, so the size cannot be read
+    run_checked(
+        ffmpeg()
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"])
+            .args(["-t", DURATION, "-y"])
+            .arg(tmp.path().join("input.mp4")),
+    );
+
+    let output = common::vhsify(tmp.path())
+        .arg("input.mp4")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Failed to read video info: input.mp4"));
+    assert!(common::stdout(&output).is_empty());
+    assert!(!tmp.path().join("input_vhs.mp4").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn unwritable_output_dir_fails_without_saving() {
