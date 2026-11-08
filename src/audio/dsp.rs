@@ -1,3 +1,10 @@
+pub(super) const LOWPASS_CUTOFF_HZ: f32 = 8000.0;
+pub(super) const HISS_AMPLITUDE: f32 = 0.002;
+const WOW_RATE_HZ: f32 = 0.7;
+const WOW_DEPTH_SAMPLES: f32 = 30.0;
+const FLUTTER_RATE_HZ: f32 = 7.0;
+const FLUTTER_DEPTH_SAMPLES: f32 = 5.0;
+
 /// ローパスフィルタ（一次IIRフィルタ）でテープ帯域幅をシミュレート
 pub(super) fn lowpass(
     samples: Vec<i16>,
@@ -38,19 +45,14 @@ pub(super) fn hiss(mut samples: Vec<i16>, amplitude: f32) -> Vec<i16> {
 
 /// LFOによるワウフラッター（テープの速度ムラによるピッチ揺れ）
 pub(super) fn wow_flutter(samples: Vec<i16>, sample_rate: f32, channels: usize) -> Vec<i16> {
-    let wow_rate_hz = 0.7;
-    let wow_depth_samples = 30.0;
-    let flutter_rate_hz = 7.0;
-    let flutter_depth_samples = 5.0;
-
     let num_frames = samples.len() / channels;
     let mut output = vec![0i16; samples.len()];
     let pi2 = 2.0 * std::f32::consts::PI;
 
     for out_frame in 0..num_frames {
         let t = out_frame as f32 / sample_rate;
-        let offset = wow_depth_samples * (pi2 * wow_rate_hz * t).sin()
-            + flutter_depth_samples * (pi2 * flutter_rate_hz * t).sin();
+        let offset = WOW_DEPTH_SAMPLES * (pi2 * WOW_RATE_HZ * t).sin()
+            + FLUTTER_DEPTH_SAMPLES * (pi2 * FLUTTER_RATE_HZ * t).sin();
         let src = (out_frame as f32 + offset).clamp(0.0, (num_frames - 2) as f32);
         let src_index = src as usize;
         let frac = src - src_index as f32;
@@ -71,7 +73,6 @@ mod tests {
     use super::*;
 
     const SAMPLE_RATE: f32 = 44100.0;
-    const CUTOFF_HZ: f32 = 8000.0;
     const FRAMES: usize = 4410;
 
     fn sine(frequency_hz: f32, amplitude: f32) -> Vec<i16> {
@@ -81,6 +82,11 @@ mod tests {
                 (amplitude * (2.0 * std::f32::consts::PI * frequency_hz * t).sin()) as i16
             })
             .collect()
+    }
+
+    /// Largest noise hiss can add or subtract
+    fn max_hiss() -> i16 {
+        (HISS_AMPLITUDE * i16::MAX as f32).ceil() as i16
     }
 
     /// Largest absolute sample in the second half, after the filter has settled
@@ -94,14 +100,14 @@ mod tests {
 
     #[test]
     fn lowpass_passes_a_constant_signal() {
-        let output = lowpass(vec![10000; FRAMES], SAMPLE_RATE, 1, CUTOFF_HZ);
+        let output = lowpass(vec![10000; FRAMES], SAMPLE_RATE, 1, LOWPASS_CUTOFF_HZ);
 
         assert!(output[FRAMES / 2..].iter().all(|&s| (s - 10000).abs() <= 1));
     }
 
     #[test]
     fn lowpass_passes_low_frequencies() {
-        let output = lowpass(sine(100.0, 10000.0), SAMPLE_RATE, 1, CUTOFF_HZ);
+        let output = lowpass(sine(100.0, 10000.0), SAMPLE_RATE, 1, LOWPASS_CUTOFF_HZ);
 
         assert!(settled_peak(&output) > 9500);
     }
@@ -113,7 +119,7 @@ mod tests {
             .map(|i| if i % 2 == 0 { 10000 } else { -10000 })
             .collect();
 
-        let output = lowpass(input, SAMPLE_RATE, 1, CUTOFF_HZ);
+        let output = lowpass(input, SAMPLE_RATE, 1, LOWPASS_CUTOFF_HZ);
 
         assert!(settled_peak(&output) < 5000);
     }
@@ -122,7 +128,7 @@ mod tests {
     fn lowpass_keeps_channels_separate() {
         let stereo: Vec<i16> = (0..FRAMES).flat_map(|_| [10000, 0]).collect();
 
-        let output = lowpass(stereo, SAMPLE_RATE, 2, CUTOFF_HZ);
+        let output = lowpass(stereo, SAMPLE_RATE, 2, LOWPASS_CUTOFF_HZ);
 
         let right: Vec<i16> = output.iter().skip(1).step_by(2).copied().collect();
         assert!(right.iter().all(|&s| s == 0));
@@ -131,38 +137,35 @@ mod tests {
 
     #[test]
     fn hiss_adds_noise_within_the_amplitude() {
-        let amplitude = 0.002;
-        let max_noise = (amplitude * i16::MAX as f32).ceil() as i16;
-
-        let output = hiss(vec![0; FRAMES], amplitude);
+        let output = hiss(vec![0; FRAMES], HISS_AMPLITUDE);
 
         assert!(output.iter().any(|&s| s != 0));
-        assert!(output.iter().all(|&s| s.abs() <= max_noise));
+        assert!(output.iter().all(|&s| s.abs() <= max_hiss()));
     }
 
     #[test]
     fn hiss_does_not_wrap_around_at_the_sample_limits() {
-        let amplitude = 0.002;
-        let max_noise = (amplitude * i16::MAX as f32).ceil() as i16;
+        let loudest = hiss(vec![i16::MAX; FRAMES], HISS_AMPLITUDE);
+        let quietest = hiss(vec![i16::MIN; FRAMES], HISS_AMPLITUDE);
 
-        let loudest = hiss(vec![i16::MAX; FRAMES], amplitude);
-        let quietest = hiss(vec![i16::MIN; FRAMES], amplitude);
-
-        assert!(loudest.iter().all(|&s| s >= i16::MAX - max_noise));
-        assert!(quietest.iter().all(|&s| s <= i16::MIN + max_noise));
+        assert!(loudest.iter().all(|&s| s >= i16::MAX - max_hiss()));
+        assert!(quietest.iter().all(|&s| s <= i16::MIN + max_hiss()));
     }
 
     #[test]
     fn hiss_is_deterministic() {
         let input = sine(440.0, 10000.0);
 
-        assert_eq!(hiss(input.clone(), 0.002), hiss(input, 0.002));
+        assert_eq!(
+            hiss(input.clone(), HISS_AMPLITUDE),
+            hiss(input, HISS_AMPLITUDE)
+        );
     }
 
     #[test]
     #[ignore = "known bug (#30): (rng >> 33) / u32::MAX only reaches 0.5, so the noise is always negative"]
     fn hiss_noise_is_centered_on_zero() {
-        let output = hiss(vec![0; FRAMES], 0.002);
+        let output = hiss(vec![0; FRAMES], HISS_AMPLITUDE);
 
         let mean = output.iter().map(|&s| f64::from(s)).sum::<f64>() / output.len() as f64;
         assert!(output.iter().any(|&s| s > 0));
@@ -185,8 +188,8 @@ mod tests {
     fn wow_flutter_reads_nearby_frames_within_its_depth() {
         // Each sample holds its own frame index, so the output shows how far each frame was read from
         let ramp: Vec<i16> = (0..FRAMES as i16).collect();
-        // Wow depth (30) plus flutter depth (5), plus one for the truncation to i16
-        let max_shift = 36;
+        // Plus one for the truncation to i16
+        let max_shift = (WOW_DEPTH_SAMPLES + FLUTTER_DEPTH_SAMPLES) as i32 + 1;
 
         let output = wow_flutter(ramp, SAMPLE_RATE, 1);
 

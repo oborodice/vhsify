@@ -33,10 +33,8 @@ pub(crate) fn apply_effects(input_wav: &str, output_wav: &str) {
     let sample_rate = spec.sample_rate as f32;
     let channels = spec.channels as usize;
 
-    let lowpass_cutoff_hz = 8000.0;
-    let hiss_amplitude = 0.002;
-    let samples = dsp::lowpass(samples, sample_rate, channels, lowpass_cutoff_hz);
-    let samples = dsp::hiss(samples, hiss_amplitude);
+    let samples = dsp::lowpass(samples, sample_rate, channels, dsp::LOWPASS_CUTOFF_HZ);
+    let samples = dsp::hiss(samples, dsp::HISS_AMPLITUDE);
     let samples = dsp::wow_flutter(samples, sample_rate, channels);
 
     write_wav(output_wav, spec, samples);
