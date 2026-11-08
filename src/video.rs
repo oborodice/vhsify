@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -85,9 +86,9 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=width,height,r_frame_rate",
+            "stream=width,height,r_frame_rate:stream_side_data=rotation",
             "-of",
-            "csv=p=0",
+            "default=noprint_wrappers=1",
             input_path,
         ])
         .output()
@@ -96,18 +97,31 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
         return Err(error());
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let line = stdout.trim().trim_end_matches(',');
-    let mut parts = line.split(',');
-    let width = parts
-        .next()
+    let fields: HashMap<&str, &str> = stdout
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .collect();
+    let width: u32 = fields
+        .get("width")
         .and_then(|val| val.parse().ok())
         .ok_or_else(error)?;
-    let height = parts
-        .next()
+    let height: u32 = fields
+        .get("height")
         .and_then(|val| val.parse().ok())
         .ok_or_else(error)?;
-    let fps = parts.next().ok_or_else(error)?.to_string();
-    Ok((width, height, fps))
+    let fps = fields.get("r_frame_rate").ok_or_else(error)?.to_string();
+    let rotation: f64 = fields
+        .get("rotation")
+        .and_then(|val| val.parse().ok())
+        .unwrap_or(0.0);
+
+    // ffprobe reports the stored size, but ffmpeg rotates the decoded frames, so a quarter turn swaps the sides
+    let quarter_turn = (rotation.round() as i64).rem_euclid(180) == 90;
+    if quarter_turn {
+        Ok((height, width, fps))
+    } else {
+        Ok((width, height, fps))
+    }
 }
 
 fn extract_frames(

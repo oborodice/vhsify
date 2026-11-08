@@ -236,28 +236,35 @@ fn missing_ffmpeg_fails_with_message() {
     assert!(common::stdout(&output).is_empty());
 }
 
+// Portrait phone videos are usually stored landscape with a display rotation, which ffmpeg applies when decoding.
+// ffprobe reports 270 degrees as -90, so it is checked separately from 90.
+
 #[test]
-#[ignore = "known bug (#25): the layout uses the coded size from ffprobe, but ffmpeg decodes rotated frames"]
-fn video_with_rotation_metadata_is_padded_as_portrait() {
+fn video_rotated_90_degrees_is_padded_as_portrait() {
     require_ffmpeg!();
-    for mode in ["bars", "crop"] {
-        println!("mode: {mode}");
-        let tmp = TempDir::new().unwrap();
-        // Portrait phone videos are usually stored landscape with a 90 degree display rotation
-        let landscape = tmp.path().join("landscape.mp4");
-        write_video(&landscape, "white", 1920, 1080, Audio::NoTrack);
-        let input = tmp.path().join("input.mp4");
-        add_rotation(&landscape, &input, 90);
+    assert_rotated_video_is_portrait(90);
+}
 
-        let output = common::run(tmp.path(), &input, &["--mode", mode]);
+#[test]
+fn video_rotated_270_degrees_is_padded_as_portrait() {
+    require_ffmpeg!();
+    assert_rotated_video_is_portrait(270);
+}
 
-        // The rotated 1080x1920 frames scale to 270x480 and are centered with 185px bars
-        assert_eq!(probe(&output).size(), (640, 480));
-        let frame = first_frame(&output);
-        assert_black(&frame, 0..179);
-        assert_white(&frame, 191..449);
-        assert_black(&frame, 461..640);
-    }
+#[test]
+fn video_rotated_180_degrees_stays_landscape() {
+    require_ffmpeg!();
+    let tmp = TempDir::new().unwrap();
+    let input = write_rotated_video(tmp.path(), 180);
+
+    let bars = common::run(tmp.path(), &input, &["--mode", "bars"]);
+    let info = probe(&bars);
+    assert_eq!(info.height, 480);
+    assert!(info.width > 640, "expected wide output, got {}", info.width);
+
+    let crop = common::run(tmp.path(), &input, &["--mode", "crop"]);
+    assert_eq!(probe(&crop).size(), (640, 480));
+    assert_white(&first_frame(&crop), 4..636);
 }
 
 #[test]
@@ -292,6 +299,34 @@ fn vhs_effect_adds_noise_to_flat_video() {
         std_dev > NOISE_STD_DEV_MIN,
         "expected noise from the VHS effect, but std dev of luma was {std_dev:.2}"
     );
+}
+
+#[track_caller]
+fn assert_rotated_video_is_portrait(degrees: u32) {
+    for mode in ["bars", "crop"] {
+        println!("mode: {mode}");
+        let tmp = TempDir::new().unwrap();
+        let input = write_rotated_video(tmp.path(), degrees);
+
+        let output = common::run(tmp.path(), &input, &["--mode", mode]);
+
+        // The rotated 1080x1920 frames scale to 270x480 and are centered with 185px bars
+        assert_eq!(probe(&output).size(), (640, 480));
+        let frame = first_frame(&output);
+        assert_black(&frame, 0..179);
+        assert_white(&frame, 191..449);
+        assert_black(&frame, 461..640);
+    }
+}
+
+/// Writes a white 1920x1080 video tagged with the given display rotation and returns its path
+#[track_caller]
+fn write_rotated_video(dir: &Path, degrees: u32) -> PathBuf {
+    let landscape = dir.join("landscape.mp4");
+    write_video(&landscape, "white", 1920, 1080, Audio::NoTrack);
+    let input = dir.join("input.mp4");
+    add_rotation(&landscape, &input, degrees);
+    input
 }
 
 #[track_caller]
