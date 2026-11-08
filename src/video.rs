@@ -7,10 +7,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 
 use crate::image as vhs_image;
+use crate::layout::{Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 
 pub fn process(
     input_path: &str,
-    scale_mode: crate::utils::ScaleMode,
+    scale_mode: ScaleMode,
     output_dir: Option<&str>,
     output_name: Option<&str>,
 ) -> Result<String, String> {
@@ -129,16 +130,10 @@ fn extract_frames(
     frame_pattern: &str,
     src_w: u32,
     src_h: u32,
-    scale_mode: crate::utils::ScaleMode,
+    scale_mode: ScaleMode,
 ) -> Result<(), String> {
-    let (visible_w, target_h) = (640u32, 480u32);
-    let scaled_w = src_w * target_h / src_h;
-    let video_filter =
-        if scaled_w > visible_w && matches!(scale_mode, crate::utils::ScaleMode::Crop) {
-            video_filter_crop(scaled_w, visible_w, target_h)
-        } else {
-            video_filter_bars(scaled_w, visible_w, target_h)
-        };
+    let scaled_w = src_w * TARGET_HEIGHT / src_h;
+    let video_filter = video_filter(scaled_w, scale_mode);
     run_ffmpeg(
         &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
         format!("Failed to extract frames: {}", input_path),
@@ -209,20 +204,17 @@ fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> 
     if status.success() { Ok(()) } else { Err(error) }
 }
 
-fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
-    let crop_x = (scaled_w - visible_w) / 2;
-    format!("scale=-2:{target_h},crop={visible_w}:{target_h}:{crop_x}:0")
-}
-
-fn video_filter_bars(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
-    if scaled_w > visible_w {
-        let bar_w = (scaled_w - visible_w) / 2;
-        let right_x = scaled_w - bar_w;
-        let bar = |x: u32| format!("drawbox=x={x}:y=0:w={bar_w}:h={target_h}:color=black:t=fill");
-        format!("scale=-2:{target_h},{},{}", bar(0), bar(right_x))
-    } else {
-        let pad_x = (visible_w - scaled_w) / 2;
-        format!("scale=-2:{target_h},pad={visible_w}:{target_h}:{pad_x}:0:black")
+fn video_filter(scaled_w: u32, scale_mode: ScaleMode) -> String {
+    let scale = format!("scale=-2:{TARGET_HEIGHT}");
+    match Layout::new(scaled_w, scale_mode) {
+        Layout::Crop { x } => format!("{scale},crop={TARGET_WIDTH}:{TARGET_HEIGHT}:{x}:0"),
+        Layout::Bars { width, bar_width } => {
+            let bar = |x: u32| {
+                format!("drawbox=x={x}:y=0:w={bar_width}:h={TARGET_HEIGHT}:color=black:t=fill")
+            };
+            format!("{scale},{},{}", bar(0), bar(width - bar_width))
+        }
+        Layout::Pad { x } => format!("{scale},pad={TARGET_WIDTH}:{TARGET_HEIGHT}:{x}:0:black"),
     }
 }
 

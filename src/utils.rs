@@ -1,11 +1,5 @@
 use std::path::Path;
 
-#[derive(Clone, clap::ValueEnum)]
-pub(crate) enum ScaleMode {
-    Bars,
-    Crop,
-}
-
 pub(crate) fn make_output_path(
     input_path: &str,
     output_dir: Option<&str>,

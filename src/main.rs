@@ -1,5 +1,6 @@
 mod audio;
 mod image;
+mod layout;
 mod orientation;
 mod utils;
 mod video;
@@ -13,8 +14,8 @@ use clap::Parser;
 struct Args {
     #[arg(help = "Input file (JPEG, PNG, WebP, AVIF, MP4, MOV, AVI, MKV)")]
     input: String,
-    #[arg(short, long, value_enum, default_value_t = utils::ScaleMode::Bars, help = "How to handle wide content: fit into 4:3 with black bars, or crop sides to 4:3")]
-    mode: utils::ScaleMode,
+    #[arg(short, long, value_enum, default_value_t = layout::ScaleMode::Bars, help = "How to handle wide content: fit into 4:3 with black bars, or crop sides to 4:3")]
+    mode: layout::ScaleMode,
     #[arg(short = 'd', long, help = "Output directory (default: same as input)")]
     output_dir: Option<String>,
     #[arg(
