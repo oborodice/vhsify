@@ -21,11 +21,11 @@ fn wide_image_keeps_scaled_width_and_covers_sides_with_bars_by_default() {
         println!("mode args: {mode_args:?}");
         let output = convert_white(1920, 1080, mode_args);
 
-        // 1920x1080 scales to 853x480; bars cover 106px on each side to leave a 4:3 area
-        assert_eq!(output.dimensions(), (853, 480));
+        // 1920x1080 scales to 854x480; bars cover 107px on each side to leave a 4:3 area
+        assert_eq!(output.dimensions(), (854, 480));
         assert_black(&output, 0..100);
         assert_white(&output, 112..741);
-        assert_black(&output, 753..853);
+        assert_black(&output, 753..854);
     }
 }
 

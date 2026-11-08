@@ -7,6 +7,15 @@ pub(crate) enum ScaleMode {
     Crop,
 }
 
+/// Returns the width of a `width`x`height` source scaled to `TARGET_HEIGHT` rows, rounded to the
+/// nearest even number. Videos are encoded as yuv420p, which needs an even width, and an even width
+/// also leaves an even excess so that bars and crops split evenly on both sides.
+pub(crate) fn scaled_width(width: u32, height: u32) -> u32 {
+    let half = u64::from(width) * u64::from(TARGET_HEIGHT / 2);
+    let half = (2 * half + u64::from(height)) / (2 * u64::from(height));
+    (half * 2) as u32
+}
+
 /// Where content scaled to `TARGET_HEIGHT` goes in the output
 #[derive(Debug, PartialEq)]
 pub(crate) enum Layout {
@@ -19,6 +28,7 @@ pub(crate) enum Layout {
 }
 
 impl Layout {
+    /// `scaled_width` is expected to come from [`scaled_width`], so it is even
     pub(crate) fn new(scaled_width: u32, mode: ScaleMode) -> Self {
         if scaled_width <= TARGET_WIDTH {
             return Layout::Pad {
@@ -58,7 +68,8 @@ mod tests {
 
     #[test]
     fn content_just_wider_than_4_3_is_cropped_in_crop_mode() {
-        assert_eq!(Layout::new(641, ScaleMode::Crop), Layout::Crop { x: 0 });
+        // 642 is the smallest even width above 640
+        assert_eq!(Layout::new(642, ScaleMode::Crop), Layout::Crop { x: 1 });
     }
 
     #[test]
@@ -76,18 +87,37 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: an odd excess is split into two equal bars, leaving 641 visible columns"]
-    fn wide_content_with_odd_excess_leaves_exactly_4_3_visible() {
-        for scaled_width in [641, 853] {
-            let Layout::Bars { width, bar_width } = Layout::new(scaled_width, ScaleMode::Bars)
+    fn scaled_width_keeps_the_aspect_ratio_at_480_rows() {
+        assert_eq!(scaled_width(640, 480), 640);
+        assert_eq!(scaled_width(1280, 960), 640);
+        assert_eq!(scaled_width(500, 500), 480);
+        assert_eq!(scaled_width(480, 640), 360);
+    }
+
+    #[test]
+    fn scaled_width_rounds_to_the_nearest_even_number() {
+        // 853.3 and 854.7 both go to 854, 852.7 goes to 852, and exactly 853 rounds up
+        assert_eq!(scaled_width(1920, 1080), 854);
+        assert_eq!(scaled_width(1282, 720), 854);
+        assert_eq!(scaled_width(1279, 720), 852);
+        assert_eq!(scaled_width(853, 480), 854);
+    }
+
+    #[test]
+    fn wide_content_leaves_exactly_4_3_visible_in_bars_mode() {
+        for (src_w, src_h) in [
+            (1920, 1080),
+            (1282, 720),
+            (1279, 720),
+            (853, 480),
+            (2560, 1080),
+        ] {
+            let Layout::Bars { width, bar_width } =
+                Layout::new(scaled_width(src_w, src_h), ScaleMode::Bars)
             else {
-                panic!("expected bars for {scaled_width}");
+                panic!("expected bars for {src_w}x{src_h}");
             };
-            assert_eq!(
-                width - 2 * bar_width,
-                TARGET_WIDTH,
-                "scaled width {scaled_width}"
-            );
+            assert_eq!(width - 2 * bar_width, TARGET_WIDTH, "input {src_w}x{src_h}");
         }
     }
 }

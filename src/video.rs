@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 
 use crate::image as vhs_image;
-use crate::layout::{Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
+use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 
 pub fn process(
     input_path: &str,
@@ -132,7 +132,7 @@ fn extract_frames(
     src_h: u32,
     scale_mode: ScaleMode,
 ) -> Result<(), String> {
-    let scaled_w = src_w * TARGET_HEIGHT / src_h;
+    let scaled_w = layout::scaled_width(src_w, src_h);
     let video_filter = video_filter(scaled_w, scale_mode);
     run_ffmpeg(
         &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
@@ -205,7 +205,7 @@ fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> 
 }
 
 fn video_filter(scaled_w: u32, scale_mode: ScaleMode) -> String {
-    let scale = format!("scale=-2:{TARGET_HEIGHT}");
+    let scale = format!("scale={scaled_w}:{TARGET_HEIGHT}");
     match Layout::new(scaled_w, scale_mode) {
         Layout::Crop { x } => format!("{scale},crop={TARGET_WIDTH}:{TARGET_HEIGHT}:{x}:0"),
         Layout::Bars { width, bar_width } => {
