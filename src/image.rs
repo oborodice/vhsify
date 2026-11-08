@@ -1,6 +1,6 @@
 use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 
-use crate::layout::{Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
+use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 use crate::orientation;
 
 pub fn process(
@@ -24,8 +24,7 @@ pub fn process(
 }
 
 fn scale_to_4_3(img: image::DynamicImage, scale_mode: ScaleMode) -> image::DynamicImage {
-    let scaled_w =
-        ((img.width() as f32 * TARGET_HEIGHT as f32) / img.height() as f32).round() as u32;
+    let scaled_w = layout::scaled_width(img.width(), img.height());
     let scaled = img
         .resize_exact(
             scaled_w,
