@@ -1,4 +1,9 @@
-use std::path::Path;
+// Each test file compiles this module separately and uses only part of it
+#![allow(dead_code)]
+
+pub mod luma;
+
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 pub fn vhsify(cwd: &Path) -> Command {
@@ -20,4 +25,17 @@ pub fn stdout(output: &Output) -> String {
 
 pub fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[track_caller]
+pub fn run(cwd: &Path, input: &Path, args: &[&str]) -> PathBuf {
+    let output = vhsify(cwd).arg(input).args(args).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let stdout = stdout(&output);
+    let path = stdout
+        .trim()
+        .strip_prefix("Saved: ")
+        .unwrap_or_else(|| panic!("unexpected stdout: {stdout}"));
+    PathBuf::from(path)
 }

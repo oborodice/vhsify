@@ -1,17 +1,15 @@
 mod common;
 
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use image::{GrayImage, Rgb, RgbImage};
 use tempfile::TempDir;
 
-// The VHS effect adds noise, so compare region averages instead of exact pixels.
-// Measured averages are about 1 for black bars and about 250 for white content.
-const BLACK_MAX: f64 = 20.0;
-const WHITE_MIN: f64 = 200.0;
-// Measured std dev of luma on a flat gray image is about 8 with the effect and 0 without it.
-const NOISE_STD_DEV_MIN: f64 = 2.0;
+use common::luma::{
+    NOISE_STD_DEV_MIN, assert_black, assert_black_area, assert_portrait_bars, assert_white,
+    assert_white_area, std_dev_luma,
+};
 
 // Columns holding the image content in 640x480 output: full width for landscape, between bars for portrait
 const LANDSCAPE_COLUMNS: Range<u32> = 0..640;
@@ -204,7 +202,7 @@ fn assert_format_is_kept(ext: &str) {
     let input = tmp.path().join(format!("input.{ext}"));
     common::write_image(&input, 64, 48);
 
-    let output_path = run(tmp.path(), &input, &[]);
+    let output_path = common::run(tmp.path(), &input, &[]);
 
     assert_eq!(output_path, tmp.path().join(format!("input_vhs.{ext}")));
     assert_eq!(image::image_dimensions(&output_path).unwrap(), (640, 480));
@@ -263,21 +261,8 @@ fn convert_white(width: u32, height: u32, args: &[&str]) -> GrayImage {
 
 #[track_caller]
 fn convert(cwd: &Path, input: &Path, args: &[&str]) -> GrayImage {
-    let output_path = run(cwd, input, args);
+    let output_path = common::run(cwd, input, args);
     image::open(output_path).unwrap().into_luma8()
-}
-
-#[track_caller]
-fn run(cwd: &Path, input: &Path, args: &[&str]) -> PathBuf {
-    let output = common::vhsify(cwd).arg(input).args(args).output().unwrap();
-    assert!(output.status.success(), "{}", common::stderr(&output));
-
-    let stdout = common::stdout(&output);
-    let path = stdout
-        .trim()
-        .strip_prefix("Saved: ")
-        .unwrap_or_else(|| panic!("unexpected stdout: {stdout}"));
-    PathBuf::from(path)
 }
 
 #[derive(PartialEq)]
@@ -312,57 +297,4 @@ fn assert_white_corner(img: &GrayImage, content: Range<u32>, white: Corner) {
             assert_black_area(img, columns, rows);
         }
     }
-}
-
-#[track_caller]
-fn assert_portrait_bars(img: &GrayImage) {
-    assert_black(img, 0..134);
-    assert_black(img, 506..640);
-}
-
-#[track_caller]
-fn assert_black(img: &GrayImage, columns: Range<u32>) {
-    assert_black_area(img, columns, 0..img.height());
-}
-
-#[track_caller]
-fn assert_white(img: &GrayImage, columns: Range<u32>) {
-    assert_white_area(img, columns, 0..img.height());
-}
-
-#[track_caller]
-fn assert_black_area(img: &GrayImage, columns: Range<u32>, rows: Range<u32>) {
-    let mean = mean_luma(img, columns.clone(), rows.clone());
-    assert!(
-        mean < BLACK_MAX,
-        "expected black at columns {columns:?}, rows {rows:?}, but mean luma was {mean:.1}"
-    );
-}
-
-#[track_caller]
-fn assert_white_area(img: &GrayImage, columns: Range<u32>, rows: Range<u32>) {
-    let mean = mean_luma(img, columns.clone(), rows.clone());
-    assert!(
-        mean > WHITE_MIN,
-        "expected white at columns {columns:?}, rows {rows:?}, but mean luma was {mean:.1}"
-    );
-}
-
-fn mean_luma(img: &GrayImage, columns: Range<u32>, rows: Range<u32>) -> f64 {
-    let count = columns.len() * rows.len();
-    let sum: f64 = rows
-        .flat_map(|y| columns.clone().map(move |x| (x, y)))
-        .map(|(x, y)| img.get_pixel(x, y)[0] as f64)
-        .sum();
-    sum / count as f64
-}
-
-fn std_dev_luma(img: &GrayImage) -> f64 {
-    let mean = mean_luma(img, 0..img.width(), 0..img.height());
-    let variance = img
-        .pixels()
-        .map(|p| (p[0] as f64 - mean).powi(2))
-        .sum::<f64>()
-        / (img.width() * img.height()) as f64;
-    variance.sqrt()
 }

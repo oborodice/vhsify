@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -11,24 +12,27 @@ pub fn process(
     scale_mode: crate::utils::ScaleMode,
     output_dir: Option<&str>,
     output_name: Option<&str>,
-) -> String {
-    check_ffmpeg();
+) -> Result<String, String> {
+    check_ffmpeg()?;
     init_thread_pool();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
-    let (src_w, src_h, fps) = get_video_info(input_path);
-    extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode);
+    let (src_w, src_h, fps) = get_video_info(input_path)?;
+    extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode)?;
 
     let frames = collect_frames(&temp.dir);
+    if frames.is_empty() {
+        return Err(format!("No video frames found: {}", input_path));
+    }
     apply_effects_to_frames(&frames, &temp.progress);
 
     let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
     let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
-    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
+    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref())?;
 
-    output_path
+    Ok(output_path)
 }
 
 struct TempDir {
@@ -39,18 +43,18 @@ struct TempDir {
     dir: PathBuf,
 }
 
-// panic で処理が中断されたときも一時ディレクトリを削除する
+// エラーや panic で処理が中断されたときも一時ディレクトリを削除する
 impl Drop for TempDir {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.dir).ok();
     }
 }
 
-fn check_ffmpeg() {
+fn check_ffmpeg() -> Result<(), String> {
     if Command::new("ffmpeg").arg("-version").output().is_err() {
-        eprintln!("Error: ffmpeg not found. Please install ffmpeg and try again.");
-        std::process::exit(1);
+        return Err("ffmpeg not found. Please install ffmpeg and try again.".to_string());
     }
+    Ok(())
 }
 
 fn init_thread_pool() {
@@ -72,7 +76,8 @@ fn create_temp_dir() -> TempDir {
     }
 }
 
-fn get_video_info(input_path: &str) -> (u32, u32, String) {
+fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
+    let error = || format!("Failed to read video info: {}", input_path);
     let output = Command::new("ffprobe")
         .args([
             "-v",
@@ -87,13 +92,22 @@ fn get_video_info(input_path: &str) -> (u32, u32, String) {
         ])
         .output()
         .expect("Failed to run ffprobe");
+    if !output.status.success() {
+        return Err(error());
+    }
     let stdout = String::from_utf8_lossy(&output.stdout);
     let line = stdout.trim().trim_end_matches(',');
     let mut parts = line.split(',');
-    let width = parts.next().and_then(|val| val.parse().ok()).unwrap_or(640);
-    let height = parts.next().and_then(|val| val.parse().ok()).unwrap_or(480);
-    let fps = parts.next().unwrap_or("30").to_string();
-    (width, height, fps)
+    let width = parts
+        .next()
+        .and_then(|val| val.parse().ok())
+        .ok_or_else(error)?;
+    let height = parts
+        .next()
+        .and_then(|val| val.parse().ok())
+        .ok_or_else(error)?;
+    let fps = parts.next().ok_or_else(error)?.to_string();
+    Ok((width, height, fps))
 }
 
 fn extract_frames(
@@ -102,7 +116,7 @@ fn extract_frames(
     src_w: u32,
     src_h: u32,
     scale_mode: crate::utils::ScaleMode,
-) {
+) -> Result<(), String> {
     let (visible_w, target_h) = (640u32, 480u32);
     let scaled_w = src_w * target_h / src_h;
     let video_filter =
@@ -111,10 +125,10 @@ fn extract_frames(
         } else {
             video_filter_bars(scaled_w, visible_w, target_h)
         };
-    Command::new("ffmpeg")
-        .args(["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"])
-        .status()
-        .expect("Failed to run ffmpeg");
+    run_ffmpeg(
+        &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
+        format!("Failed to extract frames: {}", input_path),
+    )
 }
 
 fn collect_frames(temp_dir: &Path) -> Vec<PathBuf> {
@@ -149,7 +163,12 @@ fn process_audio(input_path: &str, raw_wav: &Path, processed_wav: &Path) -> bool
     has_audio
 }
 
-fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Option<&str>) {
+fn reassemble(
+    frame_pattern: &str,
+    fps: &str,
+    output_path: &str,
+    audio_path: Option<&str>,
+) -> Result<(), String> {
     let mut args = vec![
         "-r".to_string(),
         fps.to_string(),
@@ -165,10 +184,15 @@ fn reassemble(frame_pattern: &str, fps: &str, output_path: &str, audio_path: Opt
         "-y".to_string(),
     ]);
 
-    Command::new("ffmpeg")
-        .args(&args)
+    run_ffmpeg(&args, format!("Failed to write video: {}", output_path))
+}
+
+fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> {
+    let status = Command::new("ffmpeg")
+        .args(args)
         .status()
         .expect("Failed to run ffmpeg");
+    if status.success() { Ok(()) } else { Err(error) }
 }
 
 fn video_filter_crop(scaled_w: u32, visible_w: u32, target_h: u32) -> String {
