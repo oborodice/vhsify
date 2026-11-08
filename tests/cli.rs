@@ -74,12 +74,43 @@ fn missing_video_input_fails() {
 }
 
 #[test]
-fn missing_output_dir_fails() {
+fn input_that_is_a_directory_fails() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir(tmp.path().join("input.png")).unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .arg("input.png")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Input file not found: input.png"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn missing_output_dir_for_image_fails() {
     let tmp = TempDir::new().unwrap();
     common::write_png(&tmp.path().join("input.png"), 64, 48);
 
     let output = common::vhsify(tmp.path())
         .args(["input.png", "--output-dir", "missing"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Output directory not found: missing"));
+    assert!(common::stdout(&output).is_empty());
+}
+
+#[test]
+fn missing_output_dir_for_video_fails() {
+    let tmp = TempDir::new().unwrap();
+    // Validation only checks that the input exists, so an empty file is enough and ffmpeg is not needed
+    std::fs::write(tmp.path().join("input.mp4"), "").unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .args(["input.mp4", "--output-dir", "missing"])
         .output()
         .unwrap();
 
