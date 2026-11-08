@@ -28,8 +28,6 @@ pub fn process(
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref());
 
-    std::fs::remove_dir_all(&temp.dir).ok();
-
     output_path
 }
 
@@ -39,6 +37,13 @@ struct TempPaths {
     processed_wav: PathBuf,
     progress: PathBuf,
     dir: PathBuf,
+}
+
+// panic で処理が中断されたときも一時ディレクトリを削除する
+impl Drop for TempPaths {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.dir).ok();
+    }
 }
 
 fn check_ffmpeg() {
