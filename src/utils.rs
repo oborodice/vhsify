@@ -1,3 +1,5 @@
+use std::path::Path;
+
 #[derive(Clone, clap::ValueEnum)]
 pub(crate) enum ScaleMode {
     Bars,
@@ -10,14 +12,15 @@ pub(crate) fn make_output_path(
     output_name: Option<&str>,
 ) -> String {
     let filename = make_output_filename(input_path, output_name);
-    match output_dir {
-        Some(dir) => format!("{}/{}", dir, filename),
-        None => filename,
-    }
+    let dir = match output_dir {
+        Some(dir) => Path::new(dir),
+        None => Path::new(input_path).parent().unwrap_or(Path::new("")),
+    };
+    dir.join(filename).to_string_lossy().into_owned()
 }
 
 fn make_output_filename(input_path: &str, output_name: Option<&str>) -> String {
-    let path = std::path::Path::new(input_path);
+    let path = Path::new(input_path);
     let ext = path.extension().unwrap().to_str().unwrap();
     match output_name {
         Some(name) => format!("{}.{}", name, ext),

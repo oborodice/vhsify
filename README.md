@@ -29,7 +29,7 @@ $ brew install vhsify
 ## Usage
 
 ```bash
-# Output as <input>_vhs.<ext> in the current directory
+# Output as <input>_vhs.<ext> in the same directory as the input
 $ vhsify <input>.<ext>
 
 # --mode controls how wide content is handled (default: bars)
