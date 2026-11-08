@@ -57,6 +57,11 @@ mod tests {
     }
 
     #[test]
+    fn content_just_wider_than_4_3_is_cropped_in_crop_mode() {
+        assert_eq!(Layout::new(641, ScaleMode::Crop), Layout::Crop { x: 0 });
+    }
+
+    #[test]
     fn four_by_three_content_fills_the_width_in_any_mode() {
         for mode in [ScaleMode::Bars, ScaleMode::Crop] {
             assert_eq!(Layout::new(640, mode), Layout::Pad { x: 0 });
@@ -73,9 +78,16 @@ mod tests {
     #[test]
     #[ignore = "known bug: an odd excess is split into two equal bars, leaving 641 visible columns"]
     fn wide_content_with_odd_excess_leaves_exactly_4_3_visible() {
-        let Layout::Bars { width, bar_width } = Layout::new(853, ScaleMode::Bars) else {
-            panic!("expected bars");
-        };
-        assert_eq!(width - 2 * bar_width, TARGET_WIDTH);
+        for scaled_width in [641, 853] {
+            let Layout::Bars { width, bar_width } = Layout::new(scaled_width, ScaleMode::Bars)
+            else {
+                panic!("expected bars for {scaled_width}");
+            };
+            assert_eq!(
+                width - 2 * bar_width,
+                TARGET_WIDTH,
+                "scaled width {scaled_width}"
+            );
+        }
     }
 }
