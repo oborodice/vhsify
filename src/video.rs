@@ -101,14 +101,13 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
         .lines()
         .filter_map(|line| line.split_once('='))
         .collect();
-    let width: u32 = fields
-        .get("width")
-        .and_then(|val| val.parse().ok())
-        .ok_or_else(error)?;
-    let height: u32 = fields
-        .get("height")
-        .and_then(|val| val.parse().ok())
-        .ok_or_else(error)?;
+    let size = |key| {
+        fields
+            .get(key)
+            .and_then(|val| val.parse::<u32>().ok())
+            .ok_or_else(error)
+    };
+    let (width, height) = (size("width")?, size("height")?);
     let fps = fields.get("r_frame_rate").ok_or_else(error)?.to_string();
     let rotation: f64 = fields
         .get("rotation")
@@ -117,11 +116,12 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
 
     // ffprobe reports the stored size, but ffmpeg rotates the decoded frames, so a quarter turn swaps the sides
     let quarter_turn = (rotation.round() as i64).rem_euclid(180) == 90;
-    if quarter_turn {
-        Ok((height, width, fps))
+    let (width, height) = if quarter_turn {
+        (height, width)
     } else {
-        Ok((width, height, fps))
-    }
+        (width, height)
+    };
+    Ok((width, height, fps))
 }
 
 fn extract_frames(
