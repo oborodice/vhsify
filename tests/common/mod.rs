@@ -7,10 +7,11 @@ pub fn vhsify(cwd: &Path) -> Command {
     command
 }
 
-pub fn write_png(path: &Path, width: u32, height: u32) {
-    image::RgbImage::new(width, height)
+/// Writes a white image whose format is chosen by the file extension
+pub fn write_image(path: &Path, width: u32, height: u32) {
+    image::RgbImage::from_pixel(width, height, image::Rgb([255, 255, 255]))
         .save(path)
-        .expect("Failed to write PNG");
+        .expect("Failed to write image");
 }
 
 pub fn stdout(output: &Output) -> String {

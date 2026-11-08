@@ -91,7 +91,7 @@ fn input_that_is_a_directory_fails() {
 #[test]
 fn missing_output_dir_for_image_fails() {
     let tmp = TempDir::new().unwrap();
-    common::write_png(&tmp.path().join("input.png"), 64, 48);
+    common::write_image(&tmp.path().join("input.png"), 64, 48);
 
     let output = common::vhsify(tmp.path())
         .args(["input.png", "--output-dir", "missing"])
@@ -122,7 +122,7 @@ fn missing_output_dir_for_video_fails() {
 #[test]
 fn output_dir_that_is_a_file_fails() {
     let tmp = TempDir::new().unwrap();
-    common::write_png(&tmp.path().join("input.png"), 64, 48);
+    common::write_image(&tmp.path().join("input.png"), 64, 48);
     std::fs::write(tmp.path().join("file"), "").unwrap();
 
     let output = common::vhsify(tmp.path())
@@ -139,7 +139,7 @@ fn output_dir_that_is_a_file_fails() {
 fn extension_is_case_insensitive() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.PNG");
-    common::write_png(&input, 64, 48);
+    common::write_image(&input, 64, 48);
 
     let output = common::vhsify(tmp.path())
         .arg(&input)
@@ -161,7 +161,7 @@ fn output_dir_option_sets_output_directory() {
     let input = tmp.path().join("input.png");
     let out_dir = tmp.path().join("out");
     std::fs::create_dir(&out_dir).unwrap();
-    common::write_png(&input, 64, 48);
+    common::write_image(&input, 64, 48);
 
     let output = common::vhsify(tmp.path())
         .arg(&input)
@@ -183,7 +183,7 @@ fn output_dir_option_sets_output_directory() {
 fn output_name_option_sets_filename_and_keeps_extension() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.png");
-    common::write_png(&input, 64, 48);
+    common::write_image(&input, 64, 48);
 
     let output = common::vhsify(tmp.path())
         .arg(&input)
@@ -203,7 +203,7 @@ fn short_options_set_output_directory_and_filename() {
     let input = tmp.path().join("input.png");
     let out_dir = tmp.path().join("out");
     std::fs::create_dir(&out_dir).unwrap();
-    common::write_png(&input, 64, 48);
+    common::write_image(&input, 64, 48);
 
     let output = common::vhsify(tmp.path())
         .arg(&input)
@@ -225,7 +225,7 @@ fn output_defaults_to_input_directory() {
     std::fs::create_dir(&in_dir).unwrap();
     std::fs::create_dir(&cwd).unwrap();
     let input = in_dir.join("input.png");
-    common::write_png(&input, 64, 48);
+    common::write_image(&input, 64, 48);
 
     let output = common::vhsify(&cwd).arg(&input).output().unwrap();
 
@@ -241,7 +241,7 @@ fn output_defaults_to_input_directory() {
 #[test]
 fn output_defaults_to_input_directory_for_bare_filename() {
     let tmp = TempDir::new().unwrap();
-    common::write_png(&tmp.path().join("input.png"), 64, 48);
+    common::write_image(&tmp.path().join("input.png"), 64, 48);
 
     let output = common::vhsify(tmp.path())
         .arg("input.png")
