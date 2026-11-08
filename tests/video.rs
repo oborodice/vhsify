@@ -15,15 +15,22 @@ use common::luma::{
 const FRAME_RATE: u32 = 10;
 const DURATION: &str = "0.5";
 
+/// Returns from the test early when ffmpeg is missing locally; see ffmpeg_available
+macro_rules! require_ffmpeg {
+    () => {
+        if !ffmpeg_available() {
+            return;
+        }
+    };
+}
+
 #[test]
 fn wide_video_keeps_wide_width_and_covers_sides_with_bars_by_default() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     for mode_args in [&[][..], &["--mode", "bars"][..]] {
         println!("mode args: {mode_args:?}");
         let tmp = TempDir::new().unwrap();
-        let output = convert_video(tmp.path(), "white", 1920, 1080, true, mode_args);
+        let output = convert_video(tmp.path(), "white", 1920, 1080, Audio::Tone, mode_args);
 
         // The exact width differs from images; see wide_video_has_same_width_as_image
         let info = probe(&output);
@@ -39,11 +46,16 @@ fn wide_video_keeps_wide_width_and_covers_sides_with_bars_by_default() {
 
 #[test]
 fn wide_video_is_cropped_to_4_3_in_crop_mode() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    let output = convert_video(tmp.path(), "white", 1920, 1080, true, &["--mode", "crop"]);
+    let output = convert_video(
+        tmp.path(),
+        "white",
+        1920,
+        1080,
+        Audio::Tone,
+        &["--mode", "crop"],
+    );
 
     assert_eq!(probe(&output).size(), (640, 480));
     assert_white(&first_frame(&output), 4..636);
@@ -51,13 +63,18 @@ fn wide_video_is_cropped_to_4_3_in_crop_mode() {
 
 #[test]
 fn four_by_three_video_has_no_bars_in_any_mode() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     for mode in ["bars", "crop"] {
         println!("mode: {mode}");
         let tmp = TempDir::new().unwrap();
-        let output = convert_video(tmp.path(), "white", 1280, 960, true, &["--mode", mode]);
+        let output = convert_video(
+            tmp.path(),
+            "white",
+            1280,
+            960,
+            Audio::Tone,
+            &["--mode", mode],
+        );
 
         assert_eq!(probe(&output).size(), (640, 480));
         assert_white(&first_frame(&output), 4..636);
@@ -66,13 +83,18 @@ fn four_by_three_video_has_no_bars_in_any_mode() {
 
 #[test]
 fn tall_video_is_padded_with_bars_in_any_mode() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     for mode in ["bars", "crop"] {
         println!("mode: {mode}");
         let tmp = TempDir::new().unwrap();
-        let output = convert_video(tmp.path(), "white", 480, 640, true, &["--mode", mode]);
+        let output = convert_video(
+            tmp.path(),
+            "white",
+            480,
+            640,
+            Audio::Tone,
+            &["--mode", mode],
+        );
 
         assert_eq!(probe(&output).size(), (640, 480));
         let frame = first_frame(&output);
@@ -83,11 +105,9 @@ fn tall_video_is_padded_with_bars_in_any_mode() {
 
 #[test]
 fn square_video_is_padded_with_bars() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    let output = convert_video(tmp.path(), "white", 500, 500, true, &[]);
+    let output = convert_video(tmp.path(), "white", 500, 500, Audio::Tone, &[]);
 
     // 500x500 scales to 480x480 and is centered with 80px bars
     assert_eq!(probe(&output).size(), (640, 480));
@@ -100,14 +120,12 @@ fn square_video_is_padded_with_bars() {
 #[test]
 #[ignore = "known bug: video width is truncated and rounded to even by ffmpeg, while image width is rounded"]
 fn wide_video_has_same_width_as_image() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     // 1920x1080 gives 853.3 and 1282x720 gives 854.7, so the two rounding paths disagree
     for (width, height) in [(1920, 1080), (1282, 720)] {
         println!("input: {width}x{height}");
         let tmp = TempDir::new().unwrap();
-        let video = convert_video(tmp.path(), "white", width, height, false, &[]);
+        let video = convert_video(tmp.path(), "white", width, height, Audio::NoTrack, &[]);
 
         let image_input = tmp.path().join("input.png");
         common::write_image(&image_input, width, height);
@@ -122,11 +140,9 @@ fn wide_video_has_same_width_as_image() {
 
 #[test]
 fn frame_rate_and_frame_count_are_kept() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    let output = convert_video(tmp.path(), "white", 320, 240, true, &[]);
+    let output = convert_video(tmp.path(), "white", 320, 240, Audio::Tone, &[]);
 
     let info = probe(&output);
     assert_eq!(info.frame_rate, format!("{FRAME_RATE}/1"));
@@ -135,22 +151,18 @@ fn frame_rate_and_frame_count_are_kept() {
 
 #[test]
 fn audio_is_kept() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    let output = convert_video(tmp.path(), "white", 320, 240, true, &[]);
+    let output = convert_video(tmp.path(), "white", 320, 240, Audio::Tone, &[]);
 
     assert!(probe(&output).has_audio);
 }
 
 #[test]
 fn video_without_audio_stays_without_audio() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    let output = convert_video(tmp.path(), "white", 320, 240, false, &[]);
+    let output = convert_video(tmp.path(), "white", 320, 240, Audio::NoTrack, &[]);
 
     let info = probe(&output);
     assert_eq!(info.size(), (640, 480));
@@ -159,9 +171,7 @@ fn video_without_audio_stays_without_audio() {
 
 #[test]
 fn broken_video_fails_without_saving() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("input.mp4"), "not a video").unwrap();
     // Point the system temp dir here to check that vhsify cleans up its work dir on error
@@ -186,12 +196,10 @@ fn broken_video_fails_without_saving() {
 fn unwritable_output_dir_fails_without_saving() {
     use std::os::unix::fs::PermissionsExt;
 
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.mp4");
-    write_video(&input, "white", 320, 240, false);
+    write_video(&input, "white", 320, 240, Audio::NoTrack);
     // Passes the existence check but makes the final encode fail after all frames are processed
     let out_dir = tmp.path().join("out");
     std::fs::create_dir(&out_dir).unwrap();
@@ -229,17 +237,15 @@ fn missing_ffmpeg_fails_with_message() {
 }
 
 #[test]
-#[ignore = "known bug: the layout uses the coded size from ffprobe, but ffmpeg decodes rotated frames"]
+#[ignore = "known bug (#25): the layout uses the coded size from ffprobe, but ffmpeg decodes rotated frames"]
 fn video_with_rotation_metadata_is_padded_as_portrait() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     for mode in ["bars", "crop"] {
         println!("mode: {mode}");
         let tmp = TempDir::new().unwrap();
         // Portrait phone videos are usually stored landscape with a 90 degree display rotation
         let landscape = tmp.path().join("landscape.mp4");
-        write_video(&landscape, "white", 1920, 1080, false);
+        write_video(&landscape, "white", 1920, 1080, Audio::NoTrack);
         let input = tmp.path().join("input.mp4");
         add_rotation(&landscape, &input, 90);
 
@@ -276,12 +282,10 @@ fn mkv_input_is_saved_as_mkv() {
 
 #[test]
 fn vhs_effect_adds_noise_to_flat_video() {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
     // Mid gray so that noise is not clipped at 0 or 255
-    let output = convert_video(tmp.path(), "0x808080", 640, 480, false, &[]);
+    let output = convert_video(tmp.path(), "0x808080", 640, 480, Audio::NoTrack, &[]);
 
     let std_dev = std_dev_luma(&first_frame(&output));
     assert!(
@@ -292,12 +296,10 @@ fn vhs_effect_adds_noise_to_flat_video() {
 
 #[track_caller]
 fn assert_format_is_kept(ext: &str) {
-    if !ffmpeg_available() {
-        return;
-    }
+    require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join(format!("input.{ext}"));
-    write_video(&input, "white", 320, 240, true);
+    write_video(&input, "white", 320, 240, Audio::Tone);
 
     let output = common::run(tmp.path(), &input, &[]);
 
@@ -326,41 +328,43 @@ fn convert_video(
     color: &str,
     width: u32,
     height: u32,
-    with_audio: bool,
+    audio: Audio,
     args: &[&str],
 ) -> PathBuf {
     let input = dir.join("input.mp4");
-    write_video(&input, color, width, height, with_audio);
+    write_video(&input, color, width, height, audio);
     common::run(dir, &input, args)
 }
 
+enum Audio {
+    Tone,
+    NoTrack,
+}
+
 #[track_caller]
-fn write_video(path: &Path, color: &str, width: u32, height: u32, with_audio: bool) {
-    let mut command = Command::new("ffmpeg");
-    command.args(["-loglevel", "error", "-f", "lavfi", "-i"]);
+fn write_video(path: &Path, color: &str, width: u32, height: u32, audio: Audio) {
+    let mut command = ffmpeg();
+    command.args(["-f", "lavfi", "-i"]);
     command.arg(format!("color=c={color}:s={width}x{height}:r={FRAME_RATE}"));
-    if with_audio {
+    if let Audio::Tone = audio {
         command.args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"]);
     }
     command.args(["-t", DURATION, "-pix_fmt", "yuv420p", "-y"]);
     command.arg(path);
-
-    let output = command.output().unwrap();
-    assert!(output.status.success(), "{}", common::stderr(&output));
+    run_checked(&mut command);
 }
 
 #[track_caller]
 fn add_rotation(input: &Path, output: &Path, degrees: u32) {
-    let result = Command::new("ffmpeg")
-        .args(["-loglevel", "error", "-display_rotation"])
-        .arg(degrees.to_string())
-        .arg("-i")
-        .arg(input)
-        .args(["-c", "copy", "-y"])
-        .arg(output)
-        .output()
-        .unwrap();
-    assert!(result.status.success(), "{}", common::stderr(&result));
+    run_checked(
+        ffmpeg()
+            .arg("-display_rotation")
+            .arg(degrees.to_string())
+            .arg("-i")
+            .arg(input)
+            .args(["-c", "copy", "-y"])
+            .arg(output),
+    );
 }
 
 /// Decodes the first frame through ffmpeg, which converts the limited YUV range to full-range RGB
@@ -368,14 +372,13 @@ fn add_rotation(input: &Path, output: &Path, degrees: u32) {
 fn first_frame(path: &Path) -> GrayImage {
     let tmp = TempDir::new().unwrap();
     let frame = tmp.path().join("frame.png");
-    let output = Command::new("ffmpeg")
-        .args(["-loglevel", "error", "-i"])
-        .arg(path)
-        .args(["-frames:v", "1", "-y"])
-        .arg(&frame)
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{}", common::stderr(&output));
+    run_checked(
+        ffmpeg()
+            .arg("-i")
+            .arg(path)
+            .args(["-frames:v", "1", "-y"])
+            .arg(&frame),
+    );
     image::open(&frame).unwrap().into_luma8()
 }
 
@@ -424,12 +427,24 @@ fn probe(path: &Path) -> VideoInfo {
 
 #[track_caller]
 fn ffprobe(path: &Path, args: &[&str]) -> String {
-    let output = Command::new("ffprobe")
-        .args(["-v", "error", "-of", "default=noprint_wrappers=1"])
-        .args(args)
-        .arg(path)
-        .output()
-        .unwrap();
+    run_checked(
+        Command::new("ffprobe")
+            .args(["-v", "error", "-of", "default=noprint_wrappers=1"])
+            .args(args)
+            .arg(path),
+    )
+}
+
+fn ffmpeg() -> Command {
+    let mut command = Command::new("ffmpeg");
+    command.args(["-loglevel", "error"]);
+    command
+}
+
+/// Runs the command, fails the test if it does not succeed, and returns its stdout
+#[track_caller]
+fn run_checked(command: &mut Command) -> String {
+    let output = command.output().unwrap();
     assert!(output.status.success(), "{}", common::stderr(&output));
     common::stdout(&output)
 }
