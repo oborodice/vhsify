@@ -158,6 +158,25 @@ fn video_without_audio_stays_without_audio() {
 }
 
 #[test]
+fn broken_video_fails_without_saving() {
+    if !ffmpeg_available() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("input.mp4"), "not a video").unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .arg("input.mp4")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Failed to read video info: input.mp4"));
+    assert!(common::stdout(&output).is_empty());
+    assert!(!tmp.path().join("input_vhs.mp4").exists());
+}
+
+#[test]
 fn mp4_input_is_saved_as_mp4() {
     assert_format_is_kept("mp4");
 }

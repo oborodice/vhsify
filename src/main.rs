@@ -27,19 +27,29 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    match run(args) {
+        Ok(output_path) => println!("Saved: {}", output_path),
+        Err(message) => {
+            eprintln!("{}", message);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run(args: Args) -> Result<String, String> {
     let input_path = &args.input;
     let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
-    let media = validate(input_path, output_dir).unwrap_or_else(|message| {
-        eprintln!("{}", message);
-        std::process::exit(1);
-    });
-    let output_path = match media {
-        Media::Image => image::process(input_path, args.mode, output_dir, output_name),
+    match validate(input_path, output_dir)? {
+        Media::Image => Ok(image::process(
+            input_path,
+            args.mode,
+            output_dir,
+            output_name,
+        )),
         Media::Video => video::process(input_path, args.mode, output_dir, output_name),
-    };
-    println!("Saved: {}", output_path);
+    }
 }
 
 enum Media {
