@@ -130,7 +130,6 @@ fn short_options_set_output_directory_and_filename() {
 }
 
 #[test]
-#[ignore = "known bug: output is written to the current directory, not the input's directory"]
 fn output_defaults_to_input_directory() {
     let tmp = TempDir::new().unwrap();
     let in_dir = tmp.path().join("in");
@@ -143,5 +142,25 @@ fn output_defaults_to_input_directory() {
     let output = common::vhsify(&cwd).arg(&input).output().unwrap();
 
     assert!(output.status.success(), "{}", common::stderr(&output));
-    assert!(in_dir.join("input_vhs.png").exists());
+    let expected = in_dir.join("input_vhs.png");
+    assert!(expected.exists());
+    assert_eq!(
+        common::stdout(&output).trim(),
+        format!("Saved: {}", expected.display())
+    );
+}
+
+#[test]
+fn output_defaults_to_current_directory_for_bare_filename() {
+    let tmp = TempDir::new().unwrap();
+    common::write_png(&tmp.path().join("input.png"), 64, 48);
+
+    let output = common::vhsify(tmp.path())
+        .arg("input.png")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", common::stderr(&output));
+    assert!(tmp.path().join("input_vhs.png").exists());
+    assert_eq!(common::stdout(&output).trim(), "Saved: input_vhs.png");
 }
