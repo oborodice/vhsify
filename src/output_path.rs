@@ -116,4 +116,90 @@ mod tests {
             path("in", "custom.png.jpg")
         );
     }
+
+    #[test]
+    fn writing_replaces_the_existing_output_and_leaves_no_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let output = tmp.path().join("photo_vhs.jpg");
+        std::fs::write(&output, "previous output").unwrap();
+
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "new output");
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn failed_write_keeps_the_existing_output_and_removes_the_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let output = tmp.path().join("photo_vhs.jpg");
+        std::fs::write(&output, "previous output").unwrap();
+
+        // 途中まで書いてから失敗する
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "broken").unwrap();
+            Err("write failed".to_string())
+        });
+
+        assert_eq!(result, Err("write failed".to_string()));
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "previous output");
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn failed_rename_returns_the_given_error_and_removes_the_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // 出力名と同じ名前のフォルダがあると、名前の変更が失敗する
+        std::fs::create_dir(tmp.path().join("photo_vhs.jpg")).unwrap();
+
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Err("rename failed".to_string()));
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn partial_file_is_hidden_next_to_the_output_with_the_same_extension() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut written = None;
+
+        // 名前にドットがあっても、最後の拡張子が残ること
+        let result = write_in(tmp.path(), "my.photo.jpg", |partial| {
+            written = Some(partial.to_path_buf());
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Ok(()));
+        let partial = written.unwrap();
+        assert_eq!(partial.parent(), Some(tmp.path()));
+        assert_eq!(partial.extension().unwrap(), "jpg");
+        let name = partial.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with('.'), "{name}");
+        assert_ne!(name, "my.photo.jpg");
+    }
+
+    /// `dir` の中の `name` を出力先として、名前の変更に失敗したら "rename failed" を返す `write_via_partial` を呼ぶ
+    fn write_in(
+        dir: &Path,
+        name: &str,
+        write: impl FnOnce(&Path) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let output = dir.join(name).to_string_lossy().into_owned();
+        write_via_partial(&output, "rename failed".to_string(), write)
+    }
+
+    /// `dir` の中身の名前を、隠しファイルも含めて並べ替えて返す
+    fn entries(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
 }
