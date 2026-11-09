@@ -26,8 +26,8 @@ pub(crate) fn extract(input_path: &str, output_wav: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn apply_effects(input_wav: &str, output_wav: &str) {
-    let (spec, samples) = wav::read(input_wav);
+pub(crate) fn apply_effects(input_wav: &str, output_wav: &str) -> Result<(), String> {
+    let (spec, samples) = wav::read(input_wav)?;
     let sample_rate = spec.sample_rate as f32;
     let channels = spec.channels as usize;
 
@@ -35,5 +35,5 @@ pub(crate) fn apply_effects(input_wav: &str, output_wav: &str) {
     let samples = dsp::hiss(samples, dsp::HISS_AMPLITUDE);
     let samples = dsp::wow_flutter(samples, sample_rate, channels);
 
-    wav::write(output_wav, spec, samples);
+    wav::write(output_wav, spec, samples)
 }
