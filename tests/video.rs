@@ -638,6 +638,28 @@ mod unix {
     }
 
     #[test]
+    fn unwritable_temp_dir_fails_with_message() {
+        require_ffmpeg!();
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("input.mp4");
+        write_video(&input, "white", 320, 240, Audio::NoTrack);
+        // 作業用ディレクトリを作るシステムの一時ディレクトリを、書き込めない場所に向ける
+        let temp_root = tmp.path().join("temp");
+        std::fs::create_dir(&temp_root).unwrap();
+        std::fs::set_permissions(&temp_root, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let output = common::vhsify(tmp.path())
+            .env("TMPDIR", &temp_root)
+            .arg(&input)
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert!(common::stderr(&output).contains("Failed to create temp dir"));
+        assert!(common::stdout(&output).is_empty());
+    }
+
+    #[test]
     fn missing_ffprobe_fails_with_message() {
         let tmp = TempDir::new().unwrap();
         // 入力の検証はファイルがあるかしか見ないので、空のファイルでも ffmpeg の確認まで進む
