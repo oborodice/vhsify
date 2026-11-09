@@ -1,3 +1,4 @@
+mod filter;
 mod probe;
 
 use std::ffi::OsStr;
@@ -9,7 +10,7 @@ use rayon::prelude::*;
 
 use crate::image as vhs_image;
 use crate::interrupt;
-use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
+use crate::layout::{self, ScaleMode};
 use probe::VideoInfo;
 
 pub(crate) fn process(
@@ -125,7 +126,7 @@ fn extract_frames(
     scale_mode: ScaleMode,
 ) -> Result<(), String> {
     let scaled_w = layout::scaled_width(src_w, src_h);
-    let video_filter = video_filter(scaled_w, scale_mode);
+    let video_filter = filter::video_filter(scaled_w, scale_mode);
     run_ffmpeg(
         &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
         format!("Failed to extract frames: {}", input_path),
@@ -198,20 +199,6 @@ fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> 
         .status()
         .expect("Failed to run ffmpeg");
     if status.success() { Ok(()) } else { Err(error) }
-}
-
-fn video_filter(scaled_w: u32, scale_mode: ScaleMode) -> String {
-    let scale = format!("scale={scaled_w}:{TARGET_HEIGHT}");
-    match Layout::new(scaled_w, scale_mode) {
-        Layout::Crop { x } => format!("{scale},crop={TARGET_WIDTH}:{TARGET_HEIGHT}:{x}:0"),
-        Layout::Bars { width, bar_width } => {
-            let bar = |x: u32| {
-                format!("drawbox=x={x}:y=0:w={bar_width}:h={TARGET_HEIGHT}:color=black:t=fill")
-            };
-            format!("{scale},{},{}", bar(0), bar(width - bar_width))
-        }
-        Layout::Pad { x } => format!("{scale},pad={TARGET_WIDTH}:{TARGET_HEIGHT}:{x}:0:black"),
-    }
 }
 
 fn apply_effect_to_frame(frame_path: &Path, frame_index: usize) {
