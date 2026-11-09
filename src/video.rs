@@ -40,7 +40,7 @@ pub(crate) fn process(
     apply_effects_to_frames(&frames, &temp.progress);
     interrupt::check()?;
 
-    let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
+    let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav)?;
     interrupt::check()?;
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
@@ -137,13 +137,13 @@ fn apply_effects_to_frames(frames: &[PathBuf], progress_path: &Path) {
     let _ = std::fs::write(progress_path, "audio processing...\n");
 }
 
-fn process_audio(input_path: &str, raw_wav: &Path, processed_wav: &Path) -> bool {
+fn process_audio(input_path: &str, raw_wav: &Path, processed_wav: &Path) -> Result<bool, String> {
     let has_audio = crate::audio::extract(input_path, raw_wav.to_str().unwrap());
     if has_audio {
         eprintln!("Processing audio...");
-        crate::audio::apply_effects(raw_wav.to_str().unwrap(), processed_wav.to_str().unwrap());
+        crate::audio::apply_effects(raw_wav.to_str().unwrap(), processed_wav.to_str().unwrap())?;
     }
-    has_audio
+    Ok(has_audio)
 }
 
 fn reassemble(
