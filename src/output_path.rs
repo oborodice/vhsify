@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn output_name_with_another_extension_still_gets_the_input_extension() {
-        // The output format always follows the input, so other dots are part of the name
+        // 出力の形式は常に入力に合わせるので、ほかのドットは名前の一部として扱う
         assert_eq!(
             build("in/photo.jpg", None, Some("my.photo")),
             path("in", "my.photo.jpg")

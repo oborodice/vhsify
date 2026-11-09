@@ -11,11 +11,11 @@ use common::luma::{
     NOISE_STD_DEV_MIN, assert_black, assert_portrait_bars, assert_white, std_dev_luma,
 };
 
-// Test videos are 0.5 seconds at 10 fps, i.e. 5 frames, to keep the debug build fast
+// デバッグビルドでも速く終わるよう、テストの動画は 10 fps で 0.5 秒(5 フレーム)にする
 const FRAME_RATE: u32 = 10;
 const DURATION: &str = "0.5";
 
-/// Returns from the test early when ffmpeg is missing locally; see ffmpeg_available
+/// 手元に ffmpeg がなければテストをそこで終える。ffmpeg_available を参照
 macro_rules! require_ffmpeg {
     () => {
         if !ffmpeg_available() {
@@ -32,7 +32,7 @@ fn wide_video_keeps_wide_width_and_covers_sides_with_bars_by_default() {
         let tmp = TempDir::new().unwrap();
         let output = convert_video(tmp.path(), "white", 1920, 1080, Audio::Tone, mode_args);
 
-        // The exact width differs from images; see wide_video_has_same_width_as_image
+        // 正確な幅は画像と異なる。wide_video_has_same_width_as_image を参照
         let info = probe(&output);
         assert_eq!(info.height, 480);
         assert!(info.width > 640, "expected wide output, got {}", info.width);
@@ -109,7 +109,7 @@ fn square_video_is_padded_with_bars() {
     let tmp = TempDir::new().unwrap();
     let output = convert_video(tmp.path(), "white", 500, 500, Audio::Tone, &[]);
 
-    // 500x500 scales to 480x480 and is centered with 80px bars
+    // 500x500 は 480x480 に縮小され、80px の黒帯で中央に置かれる
     assert_eq!(probe(&output).size(), (640, 480));
     let frame = first_frame(&output);
     assert_black(&frame, 0..74);
@@ -120,7 +120,7 @@ fn square_video_is_padded_with_bars() {
 #[test]
 fn wide_video_has_same_width_as_image() {
     require_ffmpeg!();
-    // 1920x1080 gives 853.3 and 1282x720 gives 854.7, so both rounding directions must agree
+    // 1920x1080 は 853.3、1282x720 は 854.7 になるので、切り上げと切り捨ての両方で一致する必要がある
     for (width, height) in [(1920, 1080), (1282, 720)] {
         println!("input: {width}x{height}");
         let tmp = TempDir::new().unwrap();
@@ -173,7 +173,7 @@ fn broken_video_fails_without_saving() {
     require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("input.mp4"), "not a video").unwrap();
-    // Point the system temp dir here to check that vhsify cleans up its work dir on error
+    // エラーのときに vhsify が作業用ディレクトリを片付けるかを確かめるため、システムの一時ディレクトリをここに向ける
     let temp_root = tmp.path().join("temp");
     std::fs::create_dir(&temp_root).unwrap();
 
@@ -194,7 +194,7 @@ fn broken_video_fails_without_saving() {
 fn audio_only_file_fails_without_saving() {
     require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    // ffprobe succeeds but reports no video stream, so the size cannot be read
+    // ffprobe は成功するが映像のストリームがないので、大きさを読み取れない
     run_checked(
         ffmpeg()
             .args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"])
@@ -217,7 +217,7 @@ fn audio_only_file_fails_without_saving() {
 fn failed_rename_leaves_no_partial_output() {
     require_ffmpeg!();
     let case = OutDirCase::new();
-    // A directory with the output name makes renaming the written video fail
+    // 出力名と同じ名前のフォルダがあると、書き出した動画の名前の変更が失敗する
     std::fs::create_dir(case.out_dir.join("input_vhs.mp4")).unwrap();
 
     let output = case.vhsify().output().unwrap();
@@ -246,7 +246,7 @@ fn converting_twice_overwrites_the_output() {
 #[test]
 fn missing_ffmpeg_fails_with_message() {
     let tmp = TempDir::new().unwrap();
-    // Input validation only checks that the file exists, so an empty file reaches the ffmpeg check
+    // 入力の検証はファイルがあるかしか見ないので、空のファイルでも ffmpeg の確認まで進む
     std::fs::write(tmp.path().join("input.mp4"), "").unwrap();
     let empty_path = tmp.path().join("bin");
     std::fs::create_dir(&empty_path).unwrap();
@@ -262,8 +262,8 @@ fn missing_ffmpeg_fails_with_message() {
     assert!(common::stdout(&output).is_empty());
 }
 
-// Portrait phone videos are usually stored landscape with a display rotation, which ffmpeg applies when decoding.
-// ffprobe reports 270 degrees as -90, so it is checked separately from 90.
+// スマホの縦向きの動画は、ふつう横向きのまま表示用の回転を付けて保存され、ffmpeg がデコード時に回転させる。
+// ffprobe は 270 度を -90 と返すので、90 度とは別に確かめる
 
 #[test]
 fn video_rotated_90_degrees_is_padded_as_portrait() {
@@ -317,7 +317,7 @@ fn mkv_input_is_saved_as_mkv() {
 fn vhs_effect_adds_noise_to_flat_video() {
     require_ffmpeg!();
     let tmp = TempDir::new().unwrap();
-    // Mid gray so that noise is not clipped at 0 or 255
+    // ノイズが 0 や 255 で頭打ちにならないよう、中間の灰色にする
     let output = convert_video(tmp.path(), "0x808080", 640, 480, Audio::NoTrack, &[]);
 
     let std_dev = std_dev_luma(&first_frame(&output));
@@ -336,7 +336,7 @@ fn assert_rotated_video_is_portrait(degrees: u32) {
 
         let output = common::run(tmp.path(), &input, &["--mode", mode]);
 
-        // The rotated 1080x1920 frames scale to 270x480 and are centered with 185px bars
+        // 回転後の 1080x1920 のフレームは 270x480 に縮小され、185px の黒帯で中央に置かれる
         assert_eq!(probe(&output).size(), (640, 480));
         let frame = first_frame(&output);
         assert_black(&frame, 0..179);
@@ -345,7 +345,7 @@ fn assert_rotated_video_is_portrait(degrees: u32) {
     }
 }
 
-/// Writes a white 1920x1080 video tagged with the given display rotation and returns its path
+/// 指定した表示用の回転を付けた白い 1920x1080 の動画を書き出し、そのパスを返す
 #[track_caller]
 fn write_rotated_video(dir: &Path, degrees: u32) -> PathBuf {
     let landscape = dir.join("landscape.mp4");
@@ -355,7 +355,7 @@ fn write_rotated_video(dir: &Path, degrees: u32) -> PathBuf {
     input
 }
 
-/// A 320x240 input video and an empty `out` dir to convert it into
+/// 320x240 の入力動画と、その変換先になる空の `out` フォルダ
 struct OutDirCase {
     tmp: TempDir,
     input: PathBuf,
@@ -377,7 +377,7 @@ impl OutDirCase {
         }
     }
 
-    /// Returns a vhsify command that converts the input into the `out` dir
+    /// 入力を `out` フォルダへ変換する vhsify のコマンドを返す
     fn vhsify(&self) -> Command {
         let mut command = common::vhsify(self.tmp.path());
         command.arg(&self.input).args(["-d", "out"]);
@@ -385,7 +385,7 @@ impl OutDirCase {
     }
 }
 
-/// Returns the sorted names of the entries in `dir`, including hidden ones
+/// `dir` の中身の名前を、隠しファイルも含めて並べ替えて返す
 fn dir_entries(dir: &Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
@@ -408,7 +408,7 @@ fn assert_format_is_kept(ext: &str) {
     assert_eq!(probe(&output).size(), (640, 480));
 }
 
-/// Returns false so the test can skip when ffmpeg is missing locally, but fails in CI where it must be installed
+/// 手元に ffmpeg がなければ false を返してテストを飛ばせるようにする。CI では必ず入っているはずなので失敗させる
 fn ffmpeg_available() -> bool {
     let found = ["ffmpeg", "ffprobe"]
         .iter()
@@ -468,7 +468,7 @@ fn add_rotation(input: &Path, output: &Path, degrees: u32) {
     );
 }
 
-/// Decodes the first frame through ffmpeg, which converts the limited YUV range to full-range RGB
+/// 最初のフレームを ffmpeg でデコードする。ffmpeg が limited range の YUV を full range の RGB に変換する
 #[track_caller]
 fn first_frame(path: &Path) -> GrayImage {
     let tmp = TempDir::new().unwrap();
@@ -542,7 +542,7 @@ fn ffmpeg() -> Command {
     command
 }
 
-/// Runs the command, fails the test if it does not succeed, and returns its stdout
+/// コマンドを実行し、成功しなければテストを失敗させ、標準出力を返す
 #[track_caller]
 fn run_checked(command: &mut Command) -> String {
     let output = command.output().unwrap();
@@ -555,7 +555,7 @@ fn run_checked(command: &mut Command) -> String {
     common::stdout(&output)
 }
 
-/// Tests that rely on Unix: signals, a fake ffmpeg shell script and file permissions
+/// Unix に頼るテスト。シグナル、偽の ffmpeg のシェルスクリプト、ファイルの権限を使う
 #[cfg(unix)]
 mod unix {
     use std::ffi::OsString;
@@ -573,7 +573,7 @@ mod unix {
         let tmp = TempDir::new().unwrap();
         let input = tmp.path().join("input.mp4");
         write_video(&input, "white", 320, 240, Audio::NoTrack);
-        // Passes the existence check but makes the final encode fail after all frames are processed
+        // 存在の確認は通るが、全フレームを処理したあとの最後の書き出しで失敗させる
         let out_dir = tmp.path().join("out");
         std::fs::create_dir(&out_dir).unwrap();
         std::fs::set_permissions(&out_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
@@ -593,13 +593,13 @@ mod unix {
     #[test]
     fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
         require_ffmpeg!();
-        // 60 frames; the progress file appears once the effect is being applied to them
+        // 60 フレーム。エフェクトをかけ始めると進捗のファイルが現れる
         let result = interrupt_conversion("2", "progress.txt", Signal::VhsifyOnly);
 
         assert_eq!(result.status.code(), Some(130));
         assert_eq!(result.leftovers, Vec::<String>::new());
         assert!(result.stderr.contains("Interrupted"));
-        // Frames that had not started yet are skipped, so processing never reaches the last frame
+        // まだ始まっていないフレームは飛ばされるので、最後のフレームまでは処理されない
         assert!(
             !result.stderr.contains("frames 60/60"),
             "all frames were processed: {}",
@@ -610,7 +610,7 @@ mod unix {
     #[test]
     fn interrupting_from_the_terminal_reports_the_interrupt() {
         require_ffmpeg!();
-        // 300 frames, so that ffmpeg is still extracting them when the signal arrives
+        // 300 フレーム。シグナルが届いたとき、ffmpeg がまだフレームを取り出している最中になるようにする
         let result = interrupt_conversion("10", "frame_00001.jpg", Signal::ProcessGroup);
 
         assert_eq!(result.status.code(), Some(130));
@@ -672,19 +672,19 @@ mod unix {
 
     enum Signal {
         VhsifyOnly,
-        /// A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
+        /// ターミナルは Ctrl+C をプロセスグループ全体に送るので、ffmpeg も中断される
         ProcessGroup,
     }
 
     struct Interrupted {
         status: ExitStatus,
         stderr: String,
-        /// Entries left in the dir that vhsify should have left empty
+        /// vhsify が空にしているはずのフォルダに残ったもの
         leftovers: Vec<String>,
     }
 
-    /// Converts a white 640x480 30 fps video of the given length, sends SIGINT once a file named `wait_for` appears in
-    /// vhsify's work dir, and returns how vhsify ended along with what is left in the system temp dir
+    /// 指定した長さの白い 640x480 30 fps の動画を変換し、vhsify の作業用ディレクトリに `wait_for` という名前の
+    /// ファイルが現れたら SIGINT を送る。vhsify の終わり方と、システムの一時ディレクトリに残ったものを返す
     #[track_caller]
     fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interrupted {
         let tmp = TempDir::new().unwrap();
@@ -714,8 +714,8 @@ mod unix {
         }
     }
 
-    /// Sends SIGINT while the fake ffmpeg is writing the output video, then lets the fake finish successfully in case
-    /// it was not interrupted, and returns how vhsify ended along with what is left in the output dir
+    /// 偽の ffmpeg が出力の動画を書き出している最中に SIGINT を送り、偽の ffmpeg が中断されていなければ成功で
+    /// 終わらせる。vhsify の終わり方と、出力先のフォルダに残ったものを返す
     #[track_caller]
     fn interrupt_write(signal: Signal) -> Interrupted {
         let case = OutDirCase::new();
@@ -733,8 +733,8 @@ mod unix {
         }
     }
 
-    /// Starts `command` in its own process group, sends SIGINT once `ready` returns true, runs `after_signal`, and
-    /// returns the exit status and stderr
+    /// `command` を専用のプロセスグループで起動し、`ready` が true を返したら SIGINT を送って `after_signal` を実行する。
+    /// 終了状態と標準エラー出力を返す
     #[track_caller]
     fn interrupt(
         command: &mut Command,
@@ -742,7 +742,7 @@ mod unix {
         signal: Signal,
         after_signal: impl FnOnce(),
     ) -> (ExitStatus, String) {
-        // Write stderr to a file to read the progress afterwards without filling a pipe
+        // パイプがいっぱいにならないよう、標準エラー出力はファイルに書かせて、あとから進捗を読む
         let mut stderr = tempfile::tempfile().unwrap();
         let mut child = command
             .process_group(0)
@@ -759,7 +759,7 @@ mod unix {
             Signal::VhsifyOnly => child.id().to_string(),
             Signal::ProcessGroup => format!("-{}", child.id()),
         };
-        // `--` keeps a negative process group id from being read as an option by the Linux kill
+        // 負のプロセスグループ ID が Linux の kill にオプションとして読まれないよう、`--` を付ける
         run_checked(Command::new("kill").args(["-s", "INT", "--", &target]));
         after_signal();
 
@@ -770,21 +770,21 @@ mod unix {
         (status, text)
     }
 
-    /// What the fake ffmpeg does when vhsify writes the output video, after writing part of it
+    /// vhsify が出力の動画を書き出すとき、偽の ffmpeg が途中まで書いたあとにどうするか
     enum FakeWrite {
         Fail,
-        /// Succeed once the test creates the `release` file of [`FakeFfmpeg`]
+        /// テストが [`FakeFfmpeg`] の `release` のファイルを作ったら成功する
         WaitForRelease,
     }
 
     struct FakeFfmpeg {
-        /// A PATH that finds the fake before the real ffmpeg
+        /// 本物の ffmpeg より先に偽物が見つかる PATH
         path: OsString,
         release: PathBuf,
     }
 
-    /// Writes a fake ffmpeg into `dir/bin`. The fake passes every call to the real ffmpeg except writing the output
-    /// video, so that the test controls how writing ends.
+    /// 偽の ffmpeg を `dir/bin` に書き出す。偽物は出力の動画の書き出し以外をすべて本物の ffmpeg に渡すので、
+    /// 書き出しがどう終わるかをテストで決められる
     #[track_caller]
     fn fake_ffmpeg(dir: &Path, on_write: FakeWrite) -> FakeFfmpeg {
         let real = run_checked(Command::new("sh").args(["-c", "command -v ffmpeg"]));
@@ -800,9 +800,9 @@ mod unix {
         };
         let script = format!(
             r#"#!/bin/sh
-# Writing the output video is the only call that starts with -r
+# 引数が -r で始まるのは、出力の動画を書き出す呼び出しだけ
 if [ "$1" != "-r" ]; then exec '{real}' "$@"; fi
-# The output path comes right before the trailing -y
+# 出力のパスは、最後の -y の直前にある
 for arg; do output=$previous; previous=$arg; done
 echo partial > "$output"
 {finish}

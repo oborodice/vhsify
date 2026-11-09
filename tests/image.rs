@@ -11,7 +11,7 @@ use common::luma::{
     assert_white_area, std_dev_luma,
 };
 
-// Columns holding the image content in 640x480 output: full width for landscape, between bars for portrait
+// 640x480 の出力で画像の内容がある列。横長なら全幅、縦長なら黒帯の間
 const LANDSCAPE_COLUMNS: Range<u32> = 0..640;
 const PORTRAIT_COLUMNS: Range<u32> = 140..500;
 
@@ -21,7 +21,7 @@ fn wide_image_keeps_scaled_width_and_covers_sides_with_bars_by_default() {
         println!("mode args: {mode_args:?}");
         let output = convert_white(1920, 1080, mode_args);
 
-        // 1920x1080 scales to 854x480; bars cover 107px on each side to leave a 4:3 area
+        // 1920x1080 は 854x480 に縮小され、左右 107px ずつを黒帯で覆って 4:3 の範囲を残す
         assert_eq!(output.dimensions(), (854, 480));
         assert_black(&output, 0..100);
         assert_white(&output, 112..741);
@@ -57,7 +57,7 @@ fn tall_image_is_padded_with_bars_in_any_mode() {
         println!("mode: {mode}");
         let output = convert_white(480, 640, &["--mode", mode]);
 
-        // 480x640 scales to 360x480 and is centered with 140px bars
+        // 480x640 は 360x480 に縮小され、140px の黒帯で中央に置かれる
         assert_eq!(output.dimensions(), (640, 480));
         assert_portrait_bars(&output);
         assert_white(&output, 146..494);
@@ -68,15 +68,15 @@ fn tall_image_is_padded_with_bars_in_any_mode() {
 fn square_image_is_padded_with_bars() {
     let output = convert_white(500, 500, &[]);
 
-    // 500x500 scales to 480x480 and is centered with 80px bars
+    // 500x500 は 480x480 に縮小され、80px の黒帯で中央に置かれる
     assert_eq!(output.dimensions(), (640, 480));
     assert_black(&output, 0..74);
     assert_white(&output, 86..554);
     assert_black(&output, 566..640);
 }
 
-// EXIF tests convert a 640x480 JPEG whose top-left quadrant is white and check where that quadrant ends up.
-// Rotated images become 480x640, which scales to 360x480 between 140px bars.
+// EXIF のテストでは、左上の 4 分の 1 だけが白い 640x480 の JPEG を変換し、その白い部分がどこに来るかを確かめる。
+// 回転した画像は 480x640 になり、360x480 に縮小されて 140px の黒帯の間に置かれる
 
 #[test]
 fn exif_orientation_normal_keeps_image_as_is() {
@@ -183,7 +183,7 @@ fn avif_input_is_saved_as_avif() {
 fn vhs_effect_adds_noise_to_flat_image() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.png");
-    // Mid gray so that noise is not clipped at 0 or 255
+    // ノイズが 0 や 255 で頭打ちにならないよう、中間の灰色にする
     RgbImage::from_pixel(640, 480, Rgb([128, 128, 128]))
         .save(&input)
         .unwrap();
@@ -208,7 +208,7 @@ fn assert_format_is_kept(ext: &str) {
     assert_eq!(image::image_dimensions(&output_path).unwrap(), (640, 480));
 }
 
-/// Converts a 640x480 JPEG whose top-left quadrant is white and the rest is black, tagged with the given EXIF orientation
+/// 左上の 4 分の 1 が白く残りが黒い 640x480 の JPEG に、指定した EXIF の向きを付けて変換する
 #[track_caller]
 fn convert_with_orientation(orientation: u16) -> GrayImage {
     let tmp = TempDir::new().unwrap();
@@ -233,7 +233,7 @@ fn write_jpeg_with_orientation(path: &Path, img: &RgbImage, orientation: u16) {
     )
     .unwrap();
 
-    // Minimal EXIF APP1 segment: big-endian TIFF header and a single IFD entry for Orientation
+    // 最小限の EXIF APP1 セグメント。ビッグエンディアンの TIFF ヘッダと、Orientation の IFD エントリ 1 つだけ
     let mut app1 = vec![0xFF, 0xE1, 0x00, 0x22];
     app1.extend_from_slice(b"Exif\0\0");
     app1.extend_from_slice(&[b'M', b'M', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x08]);
@@ -243,7 +243,7 @@ fn write_jpeg_with_orientation(path: &Path, img: &RgbImage, orientation: u16) {
     app1.extend_from_slice(&[0x00, 0x00]);
     app1.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
 
-    // Insert the segment right after the SOI marker
+    // セグメントを SOI マーカーの直後に差し込む
     let mut bytes = jpeg[..2].to_vec();
     bytes.extend(app1);
     bytes.extend(&jpeg[2..]);
@@ -273,10 +273,10 @@ enum Corner {
     BottomRight,
 }
 
-/// Checks that only the given quadrant of the content columns is white and the other three are black
+/// 内容の列のうち、指定した 4 分の 1 だけが白く、残りの 3 つが黒いことを確かめる
 #[track_caller]
 fn assert_white_corner(img: &GrayImage, content: Range<u32>, white: Corner) {
-    // Stay away from the quadrant edges, where the VHS effect blurs white into black
+    // VHS エフェクトで白が黒ににじむので、4 分の 1 の境目からは離れて調べる
     let margin = 6;
     let mid_x = (content.start + content.end) / 2;
     let mid_y = img.height() / 2;

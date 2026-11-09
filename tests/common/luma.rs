@@ -2,11 +2,11 @@ use std::ops::Range;
 
 use image::GrayImage;
 
-// The VHS effect adds noise, so compare region averages instead of exact pixels.
-// Measured averages are about 1 for black bars and about 250 for white content.
+// VHS エフェクトはノイズを加えるので、ピクセル単位ではなく範囲の平均で比べる。
+// 実測した平均は、黒帯で約 1、白い内容で約 250
 pub const BLACK_MAX: f64 = 20.0;
 pub const WHITE_MIN: f64 = 200.0;
-// Measured std dev of luma on a flat gray image is about 8 with the effect and 0 without it.
+// 一様な灰色の画像で実測した輝度の標準偏差は、エフェクトありで約 8、なしで 0
 pub const NOISE_STD_DEV_MIN: f64 = 2.0;
 
 #[track_caller]
