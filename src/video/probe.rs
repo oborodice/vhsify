@@ -11,8 +11,19 @@ pub(super) struct VideoInfo {
     pub(super) fps: String,
 }
 
-/// `ffprobe -show_entries stream=width,height,r_frame_rate:stream_side_data=rotation
-/// -of default=noprint_wrappers=1` の出力を読む。大きさかフレームレートが読めなければ None を返す
+/// 最初の映像ストリームの大きさ・フレームレート・回転を出力させる ffprobe の引数。最後に入力のパスを足す
+pub(super) const ARGS: [&str; 8] = [
+    "-v",
+    "error",
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=width,height,r_frame_rate:stream_side_data=rotation",
+    "-of",
+    "default=noprint_wrappers=1",
+];
+
+/// [`ARGS`] で実行した ffprobe の出力を読む。大きさかフレームレートが読めなければ None を返す
 pub(super) fn parse(output: &str) -> Option<VideoInfo> {
     let fields: HashMap<&str, &str> = output
         .lines()

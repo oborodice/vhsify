@@ -1,13 +1,12 @@
 mod filter;
 mod probe;
 
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rayon::prelude::*;
 
+use crate::ffmpeg;
 use crate::image as vhs_image;
 use crate::interrupt;
 use crate::layout::{self, ScaleMode};
@@ -19,7 +18,7 @@ pub(crate) fn process(
     output_dir: Option<&str>,
     output_name: Option<&str>,
 ) -> Result<String, String> {
-    check_ffmpeg()?;
+    ffmpeg::check_installed()?;
     init_thread_pool();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
@@ -70,13 +69,6 @@ impl Drop for TempDir {
     }
 }
 
-fn check_ffmpeg() -> Result<(), String> {
-    if Command::new("ffmpeg").arg("-version").output().is_err() {
-        return Err("ffmpeg not found. Please install ffmpeg and try again.".to_string());
-    }
-    Ok(())
-}
-
 fn init_thread_pool() {
     rayon::ThreadPoolBuilder::new()
         .stack_size(vhs_image::EFFECT_STACK_SIZE)
@@ -98,24 +90,10 @@ fn create_temp_dir() -> TempDir {
 
 fn get_video_info(input_path: &str) -> Result<VideoInfo, String> {
     let error = || format!("Failed to read video info: {}", input_path);
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height,r_frame_rate:stream_side_data=rotation",
-            "-of",
-            "default=noprint_wrappers=1",
-            input_path,
-        ])
-        .output()
-        .expect("Failed to run ffprobe");
-    if !output.status.success() {
-        return Err(error());
-    }
-    probe::parse(&String::from_utf8_lossy(&output.stdout)).ok_or_else(error)
+    let mut args = probe::ARGS.to_vec();
+    args.push(input_path);
+    let output = ffmpeg::probe(&args).ok_or_else(error)?;
+    probe::parse(&output).ok_or_else(error)
 }
 
 fn extract_frames(
@@ -127,10 +105,10 @@ fn extract_frames(
 ) -> Result<(), String> {
     let scaled_w = layout::scaled_width(src_w, src_h);
     let video_filter = filter::video_filter(scaled_w, scale_mode);
-    run_ffmpeg(
-        &["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"],
-        format!("Failed to extract frames: {}", input_path),
-    )
+    if !ffmpeg::run(&["-i", input_path, "-vf", &video_filter, frame_pattern, "-y"]) {
+        return Err(format!("Failed to extract frames: {}", input_path));
+    }
+    Ok(())
 }
 
 fn collect_frames(temp_dir: &Path) -> Vec<PathBuf> {
@@ -187,18 +165,12 @@ fn reassemble(
     let error = format!("Failed to write video: {}", output_path);
     crate::output_path::write_via_partial(output_path, error.clone(), |partial| {
         args.extend([partial.to_string_lossy().into_owned(), "-y".to_string()]);
-        run_ffmpeg(&args, error)
-            // ffmpeg が書き終えていても、中断されたなら保存しない
-            .and_then(|()| interrupt::check())
+        if !ffmpeg::run(&args) {
+            return Err(error);
+        }
+        // ffmpeg が書き終えていても、中断されたなら保存しない
+        interrupt::check()
     })
-}
-
-fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> {
-    let status = Command::new("ffmpeg")
-        .args(args)
-        .status()
-        .expect("Failed to run ffmpeg");
-    if status.success() { Ok(()) } else { Err(error) }
 }
 
 fn apply_effect_to_frame(frame_path: &Path, frame_index: usize) {
@@ -237,17 +209,9 @@ fn audio_args(audio_path: Option<&str>) -> Vec<String> {
 }
 
 fn encoder_args() -> Vec<String> {
-    if has_videotoolbox() {
+    if ffmpeg::has_videotoolbox() {
         vec!["-c:v".to_string(), "h264_videotoolbox".to_string()]
     } else {
         vec!["-preset".to_string(), "ultrafast".to_string()]
     }
-}
-
-fn has_videotoolbox() -> bool {
-    Command::new("ffmpeg")
-        .args(["-encoders", "-v", "quiet"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_videotoolbox"))
-        .unwrap_or(false)
 }
