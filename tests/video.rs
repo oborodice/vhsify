@@ -641,7 +641,7 @@ mod unix {
     fn failed_write_leaves_no_output() {
         require_ffmpeg!();
         let case = OutDirCase::new();
-        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::Fail);
+        let fake = fake_ffmpeg(case.tmp.path(), FakeBehavior::FailWrite);
 
         let output = case.vhsify().env("PATH", &fake.path).output().unwrap();
 
@@ -656,7 +656,7 @@ mod unix {
         let case = OutDirCase::new();
         let existing = case.out_dir.join("input_vhs.mp4");
         std::fs::write(&existing, "previous output").unwrap();
-        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::Fail);
+        let fake = fake_ffmpeg(case.tmp.path(), FakeBehavior::FailWrite);
 
         let output = case.vhsify().env("PATH", &fake.path).output().unwrap();
 
@@ -780,7 +780,7 @@ mod unix {
     #[track_caller]
     fn interrupt_write(name: &str, target: Target, while_waiting: WhileWaiting) -> Interrupted {
         let case = OutDirCase::new();
-        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::WaitForRelease);
+        let fake = fake_ffmpeg(case.tmp.path(), FakeBehavior::WaitForRelease);
 
         let mut command = case.vhsify();
         command.env("PATH", &fake.path);
@@ -852,10 +852,11 @@ mod unix {
         run_checked(Command::new("kill").args(["-s", name, "--", &target]));
     }
 
-    /// vhsify が出力の動画を書き出すとき、偽の ffmpeg が途中まで書いたあとにどうするか
-    enum FakeWrite {
-        Fail,
-        /// テストが [`FakeFfmpeg`] の `release` のファイルを作ったら成功する
+    /// 偽の ffmpeg がどうふるまうか
+    enum FakeBehavior {
+        /// 出力の動画を途中まで書いて失敗する
+        FailWrite,
+        /// 出力の動画を途中まで書き、テストが [`FakeFfmpeg`] の `release` のファイルを作ったら成功する
         WaitForRelease,
     }
 
@@ -868,15 +869,15 @@ mod unix {
     /// 偽の ffmpeg を `dir/bin` に書き出す。偽物は出力の動画の書き出し以外をすべて本物の ffmpeg に渡すので、
     /// 書き出しがどう終わるかをテストで決められる
     #[track_caller]
-    fn fake_ffmpeg(dir: &Path, on_write: FakeWrite) -> FakeFfmpeg {
+    fn fake_ffmpeg(dir: &Path, behavior: FakeBehavior) -> FakeFfmpeg {
         let real = run_checked(Command::new("sh").args(["-c", "command -v ffmpeg"]));
         let bin = dir.join("bin");
         std::fs::create_dir(&bin).unwrap();
         let release = bin.join("release");
-        let finish = match on_write {
-            FakeWrite::Fail => "exit 1".to_string(),
+        let finish = match behavior {
+            FakeBehavior::FailWrite => "exit 1".to_string(),
             // vhsify が先に終了して偽の ffmpeg が取り残されても動き続けないよう、テストの一時フォルダが消えたら終える
-            FakeWrite::WaitForRelease => format!(
+            FakeBehavior::WaitForRelease => format!(
                 "while [ ! -e '{}' ] && [ -d '{}' ]; do sleep 0.05; done",
                 release.display(),
                 bin.display()
