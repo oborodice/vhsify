@@ -638,6 +638,29 @@ mod unix {
     }
 
     #[test]
+    fn missing_ffprobe_fails_with_message() {
+        let tmp = TempDir::new().unwrap();
+        // 入力の検証はファイルがあるかしか見ないので、空のファイルでも ffmpeg の確認まで進む
+        std::fs::write(tmp.path().join("input.mp4"), "").unwrap();
+        // ffmpeg だけがあり、ffprobe がない PATH
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let ffmpeg = bin.join("ffmpeg");
+        std::fs::write(&ffmpeg, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&ffmpeg, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let output = common::vhsify(tmp.path())
+            .env("PATH", &bin)
+            .arg("input.mp4")
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert!(common::stderr(&output).contains("ffprobe not found"));
+        assert!(common::stdout(&output).is_empty());
+    }
+
+    #[test]
     fn failed_frame_extraction_fails_without_saving() {
         require_ffmpeg!();
         let case = OutDirCase::new();
