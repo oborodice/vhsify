@@ -213,61 +213,34 @@ fn audio_only_file_fails_without_saving() {
     assert!(!tmp.path().join("input_vhs.mp4").exists());
 }
 
-#[cfg(unix)]
 #[test]
-fn unwritable_output_dir_fails_without_saving() {
-    use std::os::unix::fs::PermissionsExt;
-
+fn failed_rename_leaves_no_partial_output() {
     require_ffmpeg!();
-    let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("input.mp4");
-    write_video(&input, "white", 320, 240, Audio::NoTrack);
-    // Passes the existence check but makes the final encode fail after all frames are processed
-    let out_dir = tmp.path().join("out");
-    std::fs::create_dir(&out_dir).unwrap();
-    std::fs::set_permissions(&out_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let case = OutDirCase::new();
+    // A directory with the output name makes renaming the written video fail
+    std::fs::create_dir(case.out_dir.join("input_vhs.mp4")).unwrap();
 
-    let output = common::vhsify(tmp.path())
-        .arg(&input)
-        .arg("--output-dir")
-        .arg(&out_dir)
-        .output()
-        .unwrap();
+    let output = case.vhsify().output().unwrap();
 
     assert_eq!(output.status.code(), Some(1));
     assert!(common::stderr(&output).contains("Failed to write video"));
-    assert!(common::stdout(&output).is_empty());
+    assert_eq!(dir_entries(&case.out_dir), ["input_vhs.mp4"]);
 }
 
-#[cfg(unix)]
 #[test]
-fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
+fn converting_twice_overwrites_the_output() {
     require_ffmpeg!();
-    // 60 frames; the progress file appears once the effect is being applied to them
-    let result = interrupt_conversion("2", "progress.txt", Signal::VhsifyOnly);
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.mp4");
+    write_video(&input, "white", 320, 240, Audio::Tone);
 
-    assert_eq!(result.status.code(), Some(130));
-    assert_eq!(result.temp_entries, 0);
-    assert!(result.stderr.contains("Interrupted"));
-    // Frames that had not started yet are skipped, so processing never reaches the last frame
-    assert!(
-        !result.stderr.contains("frames 60/60"),
-        "all frames were processed: {}",
-        result.stderr
-    );
-}
+    let first = common::run(tmp.path(), &input, &[]);
+    std::fs::write(&first, "previous output").unwrap();
+    let second = common::run(tmp.path(), &input, &[]);
 
-#[cfg(unix)]
-#[test]
-fn interrupting_from_the_terminal_reports_the_interrupt() {
-    require_ffmpeg!();
-    // 300 frames, so that ffmpeg is still extracting them when the signal arrives
-    let result = interrupt_conversion("10", "frame_00001.jpg", Signal::ProcessGroup);
-
-    assert_eq!(result.status.code(), Some(130));
-    assert_eq!(result.temp_entries, 0);
-    assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
-    assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
+    assert_eq!(second, first);
+    assert_eq!(probe(&second).size(), (640, 480));
+    assert_eq!(dir_entries(tmp.path()), ["input.mp4", "input_vhs.mp4"]);
 }
 
 #[test]
@@ -382,74 +355,44 @@ fn write_rotated_video(dir: &Path, degrees: u32) -> PathBuf {
     input
 }
 
-#[cfg(unix)]
-enum Signal {
-    VhsifyOnly,
-    /// A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
-    ProcessGroup,
+/// A 320x240 input video and an empty `out` dir to convert it into
+struct OutDirCase {
+    tmp: TempDir,
+    input: PathBuf,
+    out_dir: PathBuf,
 }
 
-#[cfg(unix)]
-struct Interrupted {
-    status: std::process::ExitStatus,
-    stderr: String,
-    /// Entries left in the system temp dir, which vhsify should have cleaned up
-    temp_entries: usize,
+impl OutDirCase {
+    #[track_caller]
+    fn new() -> Self {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("input.mp4");
+        write_video(&input, "white", 320, 240, Audio::Tone);
+        let out_dir = tmp.path().join("out");
+        std::fs::create_dir(&out_dir).unwrap();
+        OutDirCase {
+            tmp,
+            input,
+            out_dir,
+        }
+    }
+
+    /// Returns a vhsify command that converts the input into the `out` dir
+    fn vhsify(&self) -> Command {
+        let mut command = common::vhsify(self.tmp.path());
+        command.arg(&self.input).args(["-d", "out"]);
+        command
+    }
 }
 
-/// Converts a white 640x480 30 fps video of the given length, sends SIGINT once a file named `wait_for` appears in
-/// vhsify's work dir, and returns how vhsify ended
-#[cfg(unix)]
-#[track_caller]
-fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interrupted {
-    use std::os::unix::process::CommandExt;
-    use std::time::{Duration, Instant};
-
-    let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("input.mp4");
-    run_checked(
-        ffmpeg()
-            .args(["-f", "lavfi", "-i", "color=c=white:s=640x480:r=30"])
-            .args(["-t", seconds, "-pix_fmt", "yuv420p", "-y"])
-            .arg(&input),
-    );
-    let temp_root = tmp.path().join("temp");
-    std::fs::create_dir(&temp_root).unwrap();
-    // Write stderr to a file to read the progress afterwards without filling a pipe
-    let stderr_path = tmp.path().join("stderr.txt");
-
-    let mut child = common::vhsify(tmp.path())
-        .env("TMPDIR", &temp_root)
-        .arg(&input)
-        .process_group(0)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::fs::File::create(&stderr_path).unwrap())
-        .spawn()
-        .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let ready = || {
-        std::fs::read_dir(&temp_root)
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .any(|entry| entry.path().join(wait_for).exists())
-    };
-    while !ready() {
-        assert!(Instant::now() < deadline, "{wait_for} never appeared");
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let target = match signal {
-        Signal::VhsifyOnly => child.id().to_string(),
-        Signal::ProcessGroup => format!("-{}", child.id()),
-    };
-    // `--` keeps a negative process group id from being read as an option by the Linux kill
-    run_checked(Command::new("kill").args(["-s", "INT", "--", &target]));
-
-    let status = child.wait().unwrap();
-    Interrupted {
-        status,
-        stderr: std::fs::read_to_string(&stderr_path).unwrap(),
-        temp_entries: std::fs::read_dir(&temp_root).unwrap().count(),
-    }
+/// Returns the sorted names of the entries in `dir`, including hidden ones
+fn dir_entries(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
 }
 
 #[track_caller]
@@ -610,4 +553,269 @@ fn run_checked(command: &mut Command) -> String {
         common::stderr(&output)
     );
     common::stdout(&output)
+}
+
+/// Tests that rely on Unix: signals, a fake ffmpeg shell script and file permissions
+#[cfg(unix)]
+mod unix {
+    use std::ffi::OsString;
+    use std::io::{Read, Seek};
+    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::process::CommandExt;
+    use std::process::{ExitStatus, Stdio};
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    #[test]
+    fn unwritable_output_dir_fails_without_saving() {
+        require_ffmpeg!();
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("input.mp4");
+        write_video(&input, "white", 320, 240, Audio::NoTrack);
+        // Passes the existence check but makes the final encode fail after all frames are processed
+        let out_dir = tmp.path().join("out");
+        std::fs::create_dir(&out_dir).unwrap();
+        std::fs::set_permissions(&out_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let output = common::vhsify(tmp.path())
+            .arg(&input)
+            .arg("--output-dir")
+            .arg(&out_dir)
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert!(common::stderr(&output).contains("Failed to write video"));
+        assert!(common::stdout(&output).is_empty());
+    }
+
+    #[test]
+    fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
+        require_ffmpeg!();
+        // 60 frames; the progress file appears once the effect is being applied to them
+        let result = interrupt_conversion("2", "progress.txt", Signal::VhsifyOnly);
+
+        assert_eq!(result.status.code(), Some(130));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"));
+        // Frames that had not started yet are skipped, so processing never reaches the last frame
+        assert!(
+            !result.stderr.contains("frames 60/60"),
+            "all frames were processed: {}",
+            result.stderr
+        );
+    }
+
+    #[test]
+    fn interrupting_from_the_terminal_reports_the_interrupt() {
+        require_ffmpeg!();
+        // 300 frames, so that ffmpeg is still extracting them when the signal arrives
+        let result = interrupt_conversion("10", "frame_00001.jpg", Signal::ProcessGroup);
+
+        assert_eq!(result.status.code(), Some(130));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
+    }
+
+    #[test]
+    fn failed_write_leaves_no_output() {
+        require_ffmpeg!();
+        let case = OutDirCase::new();
+        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::Fail);
+
+        let output = case.vhsify().env("PATH", &fake.path).output().unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert!(common::stderr(&output).contains("Failed to write video"));
+        assert_eq!(dir_entries(&case.out_dir), Vec::<String>::new());
+    }
+
+    #[test]
+    fn failed_write_keeps_the_existing_output() {
+        require_ffmpeg!();
+        let case = OutDirCase::new();
+        let existing = case.out_dir.join("input_vhs.mp4");
+        std::fs::write(&existing, "previous output").unwrap();
+        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::Fail);
+
+        let output = case.vhsify().env("PATH", &fake.path).output().unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(dir_entries(&case.out_dir), ["input_vhs.mp4"]);
+        assert_eq!(
+            std::fs::read_to_string(&existing).unwrap(),
+            "previous output"
+        );
+    }
+
+    #[test]
+    fn interrupting_from_the_terminal_while_writing_leaves_no_output() {
+        require_ffmpeg!();
+        let result = interrupt_write(Signal::ProcessGroup);
+
+        assert_eq!(result.status.code(), Some(130));
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert_eq!(result.leftovers, Vec::<String>::new());
+    }
+
+    #[test]
+    fn interrupting_while_writing_discards_the_output_even_if_ffmpeg_finishes() {
+        require_ffmpeg!();
+        let result = interrupt_write(Signal::VhsifyOnly);
+
+        assert_eq!(result.status.code(), Some(130));
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert_eq!(result.leftovers, Vec::<String>::new());
+    }
+
+    enum Signal {
+        VhsifyOnly,
+        /// A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
+        ProcessGroup,
+    }
+
+    struct Interrupted {
+        status: ExitStatus,
+        stderr: String,
+        /// Entries left in the dir that vhsify should have left empty
+        leftovers: Vec<String>,
+    }
+
+    /// Converts a white 640x480 30 fps video of the given length, sends SIGINT once a file named `wait_for` appears in
+    /// vhsify's work dir, and returns how vhsify ended along with what is left in the system temp dir
+    #[track_caller]
+    fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interrupted {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("input.mp4");
+        run_checked(
+            ffmpeg()
+                .args(["-f", "lavfi", "-i", "color=c=white:s=640x480:r=30"])
+                .args(["-t", seconds, "-pix_fmt", "yuv420p", "-y"])
+                .arg(&input),
+        );
+        let temp_root = tmp.path().join("temp");
+        std::fs::create_dir(&temp_root).unwrap();
+
+        let mut command = common::vhsify(tmp.path());
+        command.env("TMPDIR", &temp_root).arg(&input);
+        let ready = || {
+            std::fs::read_dir(&temp_root)
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .any(|entry| entry.path().join(wait_for).exists())
+        };
+        let (status, stderr) = interrupt(&mut command, ready, signal, || {});
+        Interrupted {
+            status,
+            stderr,
+            leftovers: dir_entries(&temp_root),
+        }
+    }
+
+    /// Sends SIGINT while the fake ffmpeg is writing the output video, then lets the fake finish successfully in case
+    /// it was not interrupted, and returns how vhsify ended along with what is left in the output dir
+    #[track_caller]
+    fn interrupt_write(signal: Signal) -> Interrupted {
+        let case = OutDirCase::new();
+        let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::WaitForRelease);
+
+        let mut command = case.vhsify();
+        command.env("PATH", &fake.path);
+        let ready = || !dir_entries(&case.out_dir).is_empty();
+        let release = || std::fs::write(&fake.release, "").unwrap();
+        let (status, stderr) = interrupt(&mut command, ready, signal, release);
+        Interrupted {
+            status,
+            stderr,
+            leftovers: dir_entries(&case.out_dir),
+        }
+    }
+
+    /// Starts `command` in its own process group, sends SIGINT once `ready` returns true, runs `after_signal`, and
+    /// returns the exit status and stderr
+    #[track_caller]
+    fn interrupt(
+        command: &mut Command,
+        ready: impl Fn() -> bool,
+        signal: Signal,
+        after_signal: impl FnOnce(),
+    ) -> (ExitStatus, String) {
+        // Write stderr to a file to read the progress afterwards without filling a pipe
+        let mut stderr = tempfile::tempfile().unwrap();
+        let mut child = command
+            .process_group(0)
+            .stdout(Stdio::null())
+            .stderr(stderr.try_clone().unwrap())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !ready() {
+            assert!(Instant::now() < deadline, "never got ready to send SIGINT");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let target = match signal {
+            Signal::VhsifyOnly => child.id().to_string(),
+            Signal::ProcessGroup => format!("-{}", child.id()),
+        };
+        // `--` keeps a negative process group id from being read as an option by the Linux kill
+        run_checked(Command::new("kill").args(["-s", "INT", "--", &target]));
+        after_signal();
+
+        let status = child.wait().unwrap();
+        let mut text = String::new();
+        stderr.rewind().unwrap();
+        stderr.read_to_string(&mut text).unwrap();
+        (status, text)
+    }
+
+    /// What the fake ffmpeg does when vhsify writes the output video, after writing part of it
+    enum FakeWrite {
+        Fail,
+        /// Succeed once the test creates the `release` file of [`FakeFfmpeg`]
+        WaitForRelease,
+    }
+
+    struct FakeFfmpeg {
+        /// A PATH that finds the fake before the real ffmpeg
+        path: OsString,
+        release: PathBuf,
+    }
+
+    /// Writes a fake ffmpeg into `dir/bin`. The fake passes every call to the real ffmpeg except writing the output
+    /// video, so that the test controls how writing ends.
+    #[track_caller]
+    fn fake_ffmpeg(dir: &Path, on_write: FakeWrite) -> FakeFfmpeg {
+        let real = run_checked(Command::new("sh").args(["-c", "command -v ffmpeg"]));
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let release = bin.join("release");
+        let finish = match on_write {
+            FakeWrite::Fail => "exit 1".to_string(),
+            FakeWrite::WaitForRelease => format!(
+                "while [ ! -e '{}' ]; do sleep 0.05; done",
+                release.display()
+            ),
+        };
+        let script = format!(
+            r#"#!/bin/sh
+# Writing the output video is the only call that starts with -r
+if [ "$1" != "-r" ]; then exec '{real}' "$@"; fi
+# The output path comes right before the trailing -y
+for arg; do output=$previous; previous=$arg; done
+echo partial > "$output"
+{finish}
+"#,
+            real = real.trim()
+        );
+        let fake = bin.join("ffmpeg");
+        std::fs::write(&fake, script).unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let path =
+            std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&path))).unwrap();
+        FakeFfmpeg { path, release }
+    }
 }
