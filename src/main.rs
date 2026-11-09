@@ -21,7 +21,7 @@ struct Args {
     #[arg(
         short = 'n',
         long,
-        help = "Output filename without extension (default: <input>_vhs)"
+        help = "Output filename; the input's extension is added unless the name already has it (default: <input>_vhs)"
     )]
     output_name: Option<String>,
 }

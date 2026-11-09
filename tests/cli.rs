@@ -198,6 +198,23 @@ fn output_name_option_sets_filename_and_keeps_extension() {
 }
 
 #[test]
+fn output_name_with_the_input_extension_is_not_doubled() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.png");
+    common::write_image(&input, 64, 48);
+
+    let output = common::vhsify(tmp.path())
+        .arg(&input)
+        .args(["--output-name", "custom.png"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", common::stderr(&output));
+    assert!(tmp.path().join("custom.png").exists());
+    assert!(!tmp.path().join("custom.png.png").exists());
+}
+
+#[test]
 fn short_options_set_output_directory_and_filename() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.png");
