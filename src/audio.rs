@@ -1,25 +1,22 @@
 mod dsp;
 mod wav;
 
-use std::process::Command;
+use crate::ffmpeg;
 
 pub(crate) fn extract(input_path: &str, output_wav: &str) -> bool {
-    let status = Command::new("ffmpeg")
-        .args([
-            "-i",
-            input_path,
-            "-vn",
-            "-acodec",
-            "pcm_s16le",
-            "-ar",
-            "44100",
-            output_wav,
-            "-y",
-        ])
-        .status()
-        .expect("Failed to run ffmpeg");
-
-    if !status.success() {
+    // 音声のない動画では ffmpeg が失敗するので、音声なしとして扱う
+    let extracted = ffmpeg::run(&[
+        "-i",
+        input_path,
+        "-vn",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "44100",
+        output_wav,
+        "-y",
+    ]);
+    if !extracted {
         return false;
     }
 

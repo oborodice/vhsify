@@ -1,4 +1,5 @@
 mod audio;
+mod ffmpeg;
 mod image;
 mod interrupt;
 mod layout;
