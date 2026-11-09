@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,8 +38,50 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  # リリースでは Windows 版も配布しているので、Windows でしかコンパイルされない部分も確かめる
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # vcpkg は dav1d をソースからビルドし、3 分ほどかかるのでキャッシュする
+      - name: Cache dav1d
+        id: cache-dav1d
+        uses: actions/cache@v6
+        with:
+          path: C:/vcpkg/installed
+          key: ${{ runner.os }}-vcpkg-dav1d-x64-windows-static-md
+
+      - name: Install dav1d
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
+        run: vcpkg install dav1d:x64-windows-static-md
+
+      - name: Install pkg-config
+        shell: pwsh
+        run: |
+          choco install pkgconfiglite --yes
+          echo "PKG_CONFIG_PATH=C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig" >> $env:GITHUB_ENV
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # ffmpeg は入れないので、動画のテストは外す
+      - name: Run tests
+        run: cargo test --bins --test cli --test image
+
   auto-merge:
-    needs: test
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'oborodice/vhsify'
     permissions:
