@@ -2,7 +2,7 @@ mod audio;
 mod image;
 mod layout;
 mod orientation;
-mod utils;
+mod output_path;
 mod video;
 
 use std::path::Path;

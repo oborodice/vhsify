@@ -18,7 +18,7 @@ pub fn process(
     let mut rgb = img.into_rgb8();
     apply_effect(&mut rgb, 0);
 
-    let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
+    let output_path = crate::output_path::build(input_path, output_dir, output_name);
     rgb.save(&output_path).expect("Failed to save image");
     output_path
 }
