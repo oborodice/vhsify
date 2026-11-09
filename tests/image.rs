@@ -198,6 +198,22 @@ fn vhs_effect_adds_noise_to_flat_image() {
 }
 
 #[test]
+fn broken_image_fails_without_saving() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("input.png"), "not an image").unwrap();
+
+    let output = common::vhsify(tmp.path())
+        .arg("input.png")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Failed to open image: input.png"));
+    assert!(common::stdout(&output).is_empty());
+    assert_eq!(common::dir_entries(tmp.path()), ["input.png"]);
+}
+
+#[test]
 fn failed_rename_leaves_no_partial_output() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.png");
