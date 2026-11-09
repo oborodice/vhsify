@@ -15,3 +15,30 @@ pub(super) fn write(path: &str, spec: hound::WavSpec, samples: Vec<i16>) {
     }
     writer.finalize().expect("Failed to finalize WAV");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ffmpeg が取り出す WAV と同じ、44.1 kHz・16 bit・ステレオ
+    const SPEC: hound::WavSpec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    #[test]
+    fn writing_then_reading_keeps_the_spec_and_samples() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("audio.wav").to_string_lossy().into_owned();
+        // 左右のチャンネルが交互に並ぶ。両端の値も含める
+        let samples = vec![0, 1, -1, 1000, i16::MAX, i16::MIN];
+
+        write(&path, SPEC, samples.clone());
+        let (spec, read_samples) = read(&path);
+
+        assert_eq!(spec, SPEC);
+        assert_eq!(read_samples, samples);
+    }
+}
