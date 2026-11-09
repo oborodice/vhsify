@@ -1,5 +1,6 @@
 mod audio;
 mod image;
+mod interrupt;
 mod layout;
 mod orientation;
 mod output_path;
@@ -31,10 +32,9 @@ fn main() {
     match run(args) {
         Ok(output_path) => println!("Saved: {}", output_path),
         // Ctrl+C は ffmpeg にも届き、ffmpeg の失敗として返ってくることがあるため、どの段階のエラーでも中断として報告する
-        Err(_) if video::interrupted() => {
-            eprintln!("Interrupted");
-            // 128 + SIGINT(2)。シグナルで中断されたコマンドの慣習的な終了コード
-            std::process::exit(130);
+        Err(_) if interrupt::requested() => {
+            eprintln!("{}", interrupt::MESSAGE);
+            std::process::exit(interrupt::EXIT_CODE);
         }
         Err(message) => {
             eprintln!("{}", message);
