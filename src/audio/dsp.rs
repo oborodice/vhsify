@@ -36,7 +36,7 @@ pub(super) fn hiss(mut samples: Vec<i16>, amplitude: f32) -> Vec<i16> {
     let lcg_increment: u64 = 1442695040888963407;
     for sample in &mut samples {
         rng = rng.wrapping_mul(lcg_multiplier).wrapping_add(lcg_increment);
-        let noise = (rng >> 33) as f32 / u32::MAX as f32 * 2.0 - 1.0;
+        let noise = (rng >> 32) as f32 / u32::MAX as f32 * 2.0 - 1.0;
         *sample = (*sample as i32 + (noise * scale) as i32).clamp(i16::MIN as i32, i16::MAX as i32)
             as i16;
     }
@@ -163,7 +163,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug (#30): (rng >> 33) / u32::MAX only reaches 0.5, so the noise is always negative"]
     fn hiss_noise_is_centered_on_zero() {
         let output = hiss(vec![0; FRAMES], HISS_AMPLITUDE);
 
