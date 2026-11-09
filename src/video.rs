@@ -18,7 +18,6 @@ pub(crate) fn process(
 ) -> Result<String, String> {
     check_ffmpeg()?;
     init_thread_pool();
-    interrupt::watch();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 

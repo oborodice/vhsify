@@ -48,6 +48,7 @@ fn run(args: Args) -> Result<String, String> {
     let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
+    interrupt::watch();
     match validate(input_path, output_dir)? {
         Media::Image => image::process(input_path, args.mode, output_dir, output_name),
         Media::Video => video::process(input_path, args.mode, output_dir, output_name),
