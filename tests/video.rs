@@ -224,7 +224,7 @@ fn failed_rename_leaves_no_partial_output() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(common::stderr(&output).contains("Failed to write video"));
-    assert_eq!(dir_entries(&case.out_dir), ["input_vhs.mp4"]);
+    assert_eq!(common::dir_entries(&case.out_dir), ["input_vhs.mp4"]);
 }
 
 #[test]
@@ -240,7 +240,10 @@ fn converting_twice_overwrites_the_output() {
 
     assert_eq!(second, first);
     assert_eq!(probe(&second).size(), (640, 480));
-    assert_eq!(dir_entries(tmp.path()), ["input.mp4", "input_vhs.mp4"]);
+    assert_eq!(
+        common::dir_entries(tmp.path()),
+        ["input.mp4", "input_vhs.mp4"]
+    );
 }
 
 #[test]
@@ -383,16 +386,6 @@ impl OutDirCase {
         command.arg(&self.input).args(["-d", "out"]);
         command
     }
-}
-
-/// `dir` の中身の名前を、隠しファイルも含めて並べ替えて返す
-fn dir_entries(dir: &Path) -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    names
 }
 
 #[track_caller]
@@ -629,7 +622,7 @@ mod unix {
 
         assert_eq!(output.status.code(), Some(1));
         assert!(common::stderr(&output).contains("Failed to write video"));
-        assert_eq!(dir_entries(&case.out_dir), Vec::<String>::new());
+        assert_eq!(common::dir_entries(&case.out_dir), Vec::<String>::new());
     }
 
     #[test]
@@ -643,7 +636,7 @@ mod unix {
         let output = case.vhsify().env("PATH", &fake.path).output().unwrap();
 
         assert_eq!(output.status.code(), Some(1));
-        assert_eq!(dir_entries(&case.out_dir), ["input_vhs.mp4"]);
+        assert_eq!(common::dir_entries(&case.out_dir), ["input_vhs.mp4"]);
         assert_eq!(
             std::fs::read_to_string(&existing).unwrap(),
             "previous output"
@@ -719,7 +712,7 @@ mod unix {
         Interrupted {
             status,
             stderr,
-            leftovers: dir_entries(&temp_root),
+            leftovers: common::dir_entries(&temp_root),
         }
     }
 
@@ -740,7 +733,7 @@ mod unix {
 
         let mut command = case.vhsify();
         command.env("PATH", &fake.path);
-        let ready = || !dir_entries(&case.out_dir).is_empty();
+        let ready = || !common::dir_entries(&case.out_dir).is_empty();
         let act = |pid| match while_waiting {
             WhileWaiting::Release => std::fs::write(&fake.release, "").unwrap(),
             WhileWaiting::InterruptAgain => send_sigint(pid, Signal::VhsifyOnly),
@@ -749,7 +742,7 @@ mod unix {
         Interrupted {
             status,
             stderr,
-            leftovers: dir_entries(&case.out_dir),
+            leftovers: common::dir_entries(&case.out_dir),
         }
     }
 
