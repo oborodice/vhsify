@@ -30,10 +30,15 @@ fn main() {
     let args = Args::parse();
     match run(args) {
         Ok(output_path) => println!("Saved: {}", output_path),
+        // Ctrl+C は ffmpeg にも届き、ffmpeg の失敗として返ってくることがあるため、どの段階のエラーでも中断として報告する
+        Err(_) if video::interrupted() => {
+            eprintln!("Interrupted");
+            // 128 + SIGINT(2)。シグナルで中断されたコマンドの慣習的な終了コード
+            std::process::exit(130);
+        }
         Err(message) => {
             eprintln!("{}", message);
-            // 中断時は 128 + SIGINT(2)。シグナルで中断されたコマンドの慣習的な終了コード
-            std::process::exit(if video::interrupted() { 130 } else { 1 });
+            std::process::exit(1);
         }
     }
 }

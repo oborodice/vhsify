@@ -301,6 +301,59 @@ fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn interrupting_from_the_terminal_reports_the_interrupt() {
+    use std::os::unix::process::CommandExt;
+
+    require_ffmpeg!();
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.mp4");
+    // 300 frames, so that ffmpeg is still extracting them when the signal arrives
+    run_checked(
+        ffmpeg()
+            .args(["-f", "lavfi", "-i", "color=c=white:s=640x480:r=30"])
+            .args(["-t", "10", "-pix_fmt", "yuv420p", "-y"])
+            .arg(&input),
+    );
+    let temp_root = tmp.path().join("temp");
+    std::fs::create_dir(&temp_root).unwrap();
+    let stderr_path = tmp.path().join("stderr.txt");
+
+    // A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
+    let mut child = common::vhsify(tmp.path())
+        .env("TMPDIR", &temp_root)
+        .arg(&input)
+        .process_group(0)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(&stderr_path).unwrap())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let extracting = || {
+        std::fs::read_dir(&temp_root)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.path().join("frame_00001.jpg").exists())
+    };
+    while !extracting() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "extraction never started"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    run_checked(Command::new("kill").args(["-INT", &format!("-{}", child.id())]));
+
+    let status = child.wait().unwrap();
+
+    assert_eq!(status.code(), Some(130));
+    assert_eq!(std::fs::read_dir(&temp_root).unwrap().count(), 0);
+    let stderr = std::fs::read_to_string(&stderr_path).unwrap();
+    assert!(stderr.contains("Interrupted"), "{stderr}");
+    assert!(!stderr.contains("Failed to"), "{stderr}");
+}
+
 #[test]
 fn missing_ffmpeg_fails_with_message() {
     let tmp = TempDir::new().unwrap();
