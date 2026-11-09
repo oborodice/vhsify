@@ -197,6 +197,71 @@ fn vhs_effect_adds_noise_to_flat_image() {
     );
 }
 
+#[test]
+fn failed_rename_leaves_no_partial_output() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.png");
+    common::write_image(&input, 64, 48);
+    // 出力名と同じ名前のフォルダがあると、書き出した画像の名前の変更が失敗する
+    std::fs::create_dir(tmp.path().join("input_vhs.png")).unwrap();
+
+    let output = common::vhsify(tmp.path()).arg(&input).output().unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(common::stderr(&output).contains("Failed to save image"));
+    assert_eq!(
+        common::dir_entries(tmp.path()),
+        ["input.png", "input_vhs.png"]
+    );
+}
+
+#[test]
+fn converting_twice_overwrites_the_output() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.png");
+    common::write_image(&input, 64, 48);
+
+    let first = common::run(tmp.path(), &input, &[]);
+    std::fs::write(&first, "previous output").unwrap();
+    let second = common::run(tmp.path(), &input, &[]);
+
+    assert_eq!(second, first);
+    assert_eq!(image::image_dimensions(&second).unwrap(), (640, 480));
+    assert_eq!(
+        common::dir_entries(tmp.path()),
+        ["input.png", "input_vhs.png"]
+    );
+}
+
+#[cfg(unix)]
+mod unix {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[test]
+    fn unwritable_output_dir_fails_without_saving() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("input.png");
+        common::write_image(&input, 64, 48);
+        // 存在の確認は通るが、エフェクトをかけたあとの保存で失敗させる
+        let out_dir = tmp.path().join("out");
+        std::fs::create_dir(&out_dir).unwrap();
+        std::fs::set_permissions(&out_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let output = common::vhsify(tmp.path())
+            .arg(&input)
+            .arg("--output-dir")
+            .arg(&out_dir)
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        assert!(common::stderr(&output).contains("Failed to save image"));
+        assert!(common::stdout(&output).is_empty());
+    }
+}
+
 fn assert_format_is_kept(ext: &str) {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join(format!("input.{ext}"));

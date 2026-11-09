@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn build(
     input_path: &str,
@@ -32,6 +32,32 @@ fn filename(input_path: &str, output_name: Option<&str>) -> String {
             ext
         ),
     }
+}
+
+/// 書き出しの途中で中断・失敗しても、壊れたファイルが残ったり既存のファイルが失われたりしないよう、
+/// `write` に別名のパスを渡して書き出させ、成功したら出力先へ名前を変える。失敗したら別名のファイルを消す。
+/// `error` は名前の変更に失敗したときのメッセージ
+pub(crate) fn write_via_partial(
+    output_path: &str,
+    error: String,
+    write: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    let partial = partial_path(output_path);
+    let result =
+        write(&partial).and_then(|()| std::fs::rename(&partial, output_path).map_err(|_| error));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    result
+}
+
+/// 出力先と同じフォルダの隠しファイル。名前の変更が一瞬で終わるよう同じフォルダにし、
+/// ffmpeg や image クレートが拡張子で形式を決めるので拡張子は残す
+fn partial_path(output_path: &str) -> PathBuf {
+    let path = Path::new(output_path);
+    let stem = path.file_stem().unwrap().to_string_lossy();
+    let ext = path.extension().unwrap().to_string_lossy();
+    path.with_file_name(format!(".{stem}.partial.{ext}"))
 }
 
 #[cfg(test)]
@@ -89,5 +115,91 @@ mod tests {
             build("in/photo.jpg", None, Some("custom.png")),
             path("in", "custom.png.jpg")
         );
+    }
+
+    #[test]
+    fn writing_replaces_the_existing_output_and_leaves_no_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let output = tmp.path().join("photo_vhs.jpg");
+        std::fs::write(&output, "previous output").unwrap();
+
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "new output");
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn failed_write_keeps_the_existing_output_and_removes_the_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let output = tmp.path().join("photo_vhs.jpg");
+        std::fs::write(&output, "previous output").unwrap();
+
+        // 途中まで書いてから失敗する
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "broken").unwrap();
+            Err("write failed".to_string())
+        });
+
+        assert_eq!(result, Err("write failed".to_string()));
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "previous output");
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn failed_rename_returns_the_given_error_and_removes_the_partial_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // 出力名と同じ名前のフォルダがあると、名前の変更が失敗する
+        std::fs::create_dir(tmp.path().join("photo_vhs.jpg")).unwrap();
+
+        let result = write_in(tmp.path(), "photo_vhs.jpg", |partial| {
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Err("rename failed".to_string()));
+        assert_eq!(entries(tmp.path()), ["photo_vhs.jpg"]);
+    }
+
+    #[test]
+    fn partial_file_is_hidden_next_to_the_output_with_the_same_extension() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut written = None;
+
+        // 名前にドットがあっても、最後の拡張子が残ること
+        let result = write_in(tmp.path(), "my.photo.jpg", |partial| {
+            written = Some(partial.to_path_buf());
+            std::fs::write(partial, "new output").map_err(|e| e.to_string())
+        });
+
+        assert_eq!(result, Ok(()));
+        let partial = written.unwrap();
+        assert_eq!(partial.parent(), Some(tmp.path()));
+        assert_eq!(partial.extension().unwrap(), "jpg");
+        let name = partial.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with('.'), "{name}");
+        assert_ne!(name, "my.photo.jpg");
+    }
+
+    /// `dir` の中の `name` を出力先として、名前の変更に失敗したら "rename failed" を返す `write_via_partial` を呼ぶ
+    fn write_in(
+        dir: &Path,
+        name: &str,
+        write: impl FnOnce(&Path) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let output = dir.join(name).to_string_lossy().into_owned();
+        write_via_partial(&output, "rename failed".to_string(), write)
+    }
+
+    /// `dir` の中身の名前を、隠しファイルも含めて並べ替えて返す
+    fn entries(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
     }
 }

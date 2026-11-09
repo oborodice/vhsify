@@ -8,7 +8,7 @@ pub(crate) fn process(
     scale_mode: ScaleMode,
     output_dir: Option<&str>,
     output_name: Option<&str>,
-) -> String {
+) -> Result<String, String> {
     let mut img = image::open(input_path).expect("Failed to open image");
     if let Some(orientation) = orientation::read(input_path) {
         img.apply_orientation(orientation);
@@ -19,8 +19,11 @@ pub(crate) fn process(
     apply_effect_with_large_stack(&mut rgb);
 
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
-    rgb.save(&output_path).expect("Failed to save image");
-    output_path
+    let error = format!("Failed to save image: {}", output_path);
+    crate::output_path::write_via_partial(&output_path, error.clone(), |partial| {
+        rgb.save(partial).map_err(|_| error)
+    })?;
+    Ok(output_path)
 }
 
 fn scale_to_4_3(img: image::DynamicImage, scale_mode: ScaleMode) -> image::DynamicImage {

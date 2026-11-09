@@ -27,6 +27,16 @@ pub fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+/// `dir` の中身の名前を、隠しファイルも含めて並べ替えて返す
+pub fn dir_entries(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
 #[track_caller]
 pub fn run(cwd: &Path, input: &Path, args: &[&str]) -> PathBuf {
     let output = vhsify(cwd).arg(input).args(args).output().unwrap();
