@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn build(
     input_path: &str,
@@ -32,6 +32,32 @@ fn filename(input_path: &str, output_name: Option<&str>) -> String {
             ext
         ),
     }
+}
+
+/// 書き出しの途中で中断・失敗しても、壊れたファイルが残ったり既存のファイルが失われたりしないよう、
+/// `write` に別名のパスを渡して書き出させ、成功したら出力先へ名前を変える。失敗したら別名のファイルを消す。
+/// `error` は名前の変更に失敗したときのメッセージ
+pub(crate) fn write_via_partial(
+    output_path: &str,
+    error: String,
+    write: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    let partial = partial_path(output_path);
+    let result =
+        write(&partial).and_then(|()| std::fs::rename(&partial, output_path).map_err(|_| error));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    result
+}
+
+/// 出力先と同じフォルダの隠しファイル。名前の変更が一瞬で終わるよう同じフォルダにし、
+/// ffmpeg や image クレートが拡張子で形式を決めるので拡張子は残す
+fn partial_path(output_path: &str) -> PathBuf {
+    let path = Path::new(output_path);
+    let stem = path.file_stem().unwrap().to_string_lossy();
+    let ext = path.extension().unwrap().to_string_lossy();
+    path.with_file_name(format!(".{stem}.partial.{ext}"))
 }
 
 #[cfg(test)]

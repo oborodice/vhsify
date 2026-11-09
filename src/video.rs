@@ -186,9 +186,6 @@ fn reassemble(
     output_path: &str,
     audio_path: Option<&str>,
 ) -> Result<(), String> {
-    // 書き出しの途中で中断・失敗しても、壊れた動画が残ったり既存のファイルが失われたりしないよう、
-    // 別名に書き出してから名前を変える
-    let partial = partial_path(output_path);
     let mut args = vec![
         "-r".to_string(),
         fps.to_string(),
@@ -197,31 +194,15 @@ fn reassemble(
     ];
     args.extend(audio_args(audio_path));
     args.extend(encoder_args());
-    args.extend([
-        "-pix_fmt".to_string(),
-        "yuv420p".to_string(),
-        partial.to_string_lossy().into_owned(),
-        "-y".to_string(),
-    ]);
+    args.extend(["-pix_fmt".to_string(), "yuv420p".to_string()]);
 
     let error = format!("Failed to write video: {}", output_path);
-    let result = run_ffmpeg(&args, error.clone())
-        // ffmpeg が書き終えていても、中断されたなら保存しない
-        .and_then(|()| interrupt::check())
-        .and_then(|()| std::fs::rename(&partial, output_path).map_err(|_| error));
-    if result.is_err() {
-        let _ = std::fs::remove_file(&partial);
-    }
-    result
-}
-
-/// 出力先と同じフォルダの隠しファイル。名前の変更が一瞬で終わるよう同じフォルダにし、
-/// ffmpeg が拡張子で形式を決めるので拡張子は残す
-fn partial_path(output_path: &str) -> PathBuf {
-    let path = Path::new(output_path);
-    let stem = path.file_stem().unwrap().to_string_lossy();
-    let ext = path.extension().unwrap().to_string_lossy();
-    path.with_file_name(format!(".{stem}.partial.{ext}"))
+    crate::output_path::write_via_partial(output_path, error.clone(), |partial| {
+        args.extend([partial.to_string_lossy().into_owned(), "-y".to_string()]);
+        run_ffmpeg(&args, error)
+            // ffmpeg が書き終えていても、中断されたなら保存しない
+            .and_then(|()| interrupt::check())
+    })
 }
 
 fn run_ffmpeg<S: AsRef<OsStr>>(args: &[S], error: String) -> Result<(), String> {
