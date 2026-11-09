@@ -9,7 +9,8 @@ pub(crate) fn process(
     output_dir: Option<&str>,
     output_name: Option<&str>,
 ) -> Result<String, String> {
-    let mut img = image::open(input_path).expect("Failed to open image");
+    let mut img =
+        image::open(input_path).map_err(|_| format!("Failed to open image: {}", input_path))?;
     if let Some(orientation) = orientation::read(input_path) {
         img.apply_orientation(orientation);
     }
