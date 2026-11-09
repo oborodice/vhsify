@@ -243,115 +243,31 @@ fn unwritable_output_dir_fails_without_saving() {
 #[test]
 fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
     require_ffmpeg!();
-    let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("input.mp4");
-    // 60 frames, so that processing is still going on when the signal arrives
-    run_checked(
-        ffmpeg()
-            .args([
-                "-f",
-                "lavfi",
-                "-i",
-                "color=c=white:s=640x480:r=30",
-                "-t",
-                "2",
-            ])
-            .args(["-pix_fmt", "yuv420p", "-y"])
-            .arg(&input),
-    );
-    let temp_root = tmp.path().join("temp");
-    std::fs::create_dir(&temp_root).unwrap();
+    // 60 frames; the progress file appears once the effect is being applied to them
+    let result = interrupt_conversion("2", "progress.txt", Signal::VhsifyOnly);
 
-    // Write stderr to a file to read the progress afterwards without filling a pipe
-    let stderr_path = tmp.path().join("stderr.txt");
-    let mut child = common::vhsify(tmp.path())
-        .env("TMPDIR", &temp_root)
-        .arg(&input)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::fs::File::create(&stderr_path).unwrap())
-        .spawn()
-        .unwrap();
-    // The progress file appears once frame extraction is done and the effect is being applied
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    let progress_written = || {
-        std::fs::read_dir(&temp_root)
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .any(|entry| entry.path().join("progress.txt").exists())
-    };
-    while !progress_written() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "processing never started"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    run_checked(Command::new("kill").args(["-INT", &child.id().to_string()]));
-
-    let status = child.wait().unwrap();
-
-    assert_eq!(status.code(), Some(130));
-    assert_eq!(std::fs::read_dir(&temp_root).unwrap().count(), 0);
+    assert_eq!(result.status.code(), Some(130));
+    assert_eq!(result.temp_entries, 0);
+    assert!(result.stderr.contains("Interrupted"));
     // Frames that had not started yet are skipped, so processing never reaches the last frame
-    let stderr = std::fs::read_to_string(&stderr_path).unwrap();
-    assert!(stderr.contains("Interrupted"));
     assert!(
-        !stderr.contains("frames 60/60"),
-        "all frames were processed: {stderr}"
+        !result.stderr.contains("frames 60/60"),
+        "all frames were processed: {}",
+        result.stderr
     );
 }
 
 #[cfg(unix)]
 #[test]
 fn interrupting_from_the_terminal_reports_the_interrupt() {
-    use std::os::unix::process::CommandExt;
-
     require_ffmpeg!();
-    let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("input.mp4");
     // 300 frames, so that ffmpeg is still extracting them when the signal arrives
-    run_checked(
-        ffmpeg()
-            .args(["-f", "lavfi", "-i", "color=c=white:s=640x480:r=30"])
-            .args(["-t", "10", "-pix_fmt", "yuv420p", "-y"])
-            .arg(&input),
-    );
-    let temp_root = tmp.path().join("temp");
-    std::fs::create_dir(&temp_root).unwrap();
-    let stderr_path = tmp.path().join("stderr.txt");
+    let result = interrupt_conversion("10", "frame_00001.jpg", Signal::ProcessGroup);
 
-    // A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
-    let mut child = common::vhsify(tmp.path())
-        .env("TMPDIR", &temp_root)
-        .arg(&input)
-        .process_group(0)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::fs::File::create(&stderr_path).unwrap())
-        .spawn()
-        .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    let extracting = || {
-        std::fs::read_dir(&temp_root)
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .any(|entry| entry.path().join("frame_00001.jpg").exists())
-    };
-    while !extracting() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "extraction never started"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    run_checked(Command::new("kill").args(["-INT", &format!("-{}", child.id())]));
-
-    let status = child.wait().unwrap();
-
-    assert_eq!(status.code(), Some(130));
-    assert_eq!(std::fs::read_dir(&temp_root).unwrap().count(), 0);
-    let stderr = std::fs::read_to_string(&stderr_path).unwrap();
-    assert!(stderr.contains("Interrupted"), "{stderr}");
-    assert!(!stderr.contains("Failed to"), "{stderr}");
+    assert_eq!(result.status.code(), Some(130));
+    assert_eq!(result.temp_entries, 0);
+    assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+    assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
 }
 
 #[test]
@@ -464,6 +380,75 @@ fn write_rotated_video(dir: &Path, degrees: u32) -> PathBuf {
     let input = dir.join("input.mp4");
     add_rotation(&landscape, &input, degrees);
     input
+}
+
+#[cfg(unix)]
+enum Signal {
+    VhsifyOnly,
+    /// A terminal sends Ctrl+C to the whole process group, so ffmpeg is interrupted too
+    ProcessGroup,
+}
+
+#[cfg(unix)]
+struct Interrupted {
+    status: std::process::ExitStatus,
+    stderr: String,
+    /// Entries left in the system temp dir, which vhsify should have cleaned up
+    temp_entries: usize,
+}
+
+/// Converts a white 640x480 30 fps video of the given length, sends SIGINT once a file named `wait_for` appears in
+/// vhsify's work dir, and returns how vhsify ended
+#[cfg(unix)]
+#[track_caller]
+fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interrupted {
+    use std::os::unix::process::CommandExt;
+    use std::time::{Duration, Instant};
+
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("input.mp4");
+    run_checked(
+        ffmpeg()
+            .args(["-f", "lavfi", "-i", "color=c=white:s=640x480:r=30"])
+            .args(["-t", seconds, "-pix_fmt", "yuv420p", "-y"])
+            .arg(&input),
+    );
+    let temp_root = tmp.path().join("temp");
+    std::fs::create_dir(&temp_root).unwrap();
+    // Write stderr to a file to read the progress afterwards without filling a pipe
+    let stderr_path = tmp.path().join("stderr.txt");
+
+    let mut child = common::vhsify(tmp.path())
+        .env("TMPDIR", &temp_root)
+        .arg(&input)
+        .process_group(0)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(&stderr_path).unwrap())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let ready = || {
+        std::fs::read_dir(&temp_root)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.path().join(wait_for).exists())
+    };
+    while !ready() {
+        assert!(Instant::now() < deadline, "{wait_for} never appeared");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let target = match signal {
+        Signal::VhsifyOnly => child.id().to_string(),
+        Signal::ProcessGroup => format!("-{}", child.id()),
+    };
+    run_checked(Command::new("kill").args(["-INT", &target]));
+
+    let status = child.wait().unwrap();
+    Interrupted {
+        status,
+        stderr: std::fs::read_to_string(&stderr_path).unwrap(),
+        temp_entries: std::fs::read_dir(&temp_root).unwrap().count(),
+    }
 }
 
 #[track_caller]
