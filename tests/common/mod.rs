@@ -1,4 +1,4 @@
-// Each test file compiles this module separately and uses only part of it
+// テストのファイルごとにこのモジュールを別々にコンパイルし、それぞれ一部しか使わない
 #![allow(dead_code)]
 
 pub mod luma;
@@ -12,7 +12,7 @@ pub fn vhsify(cwd: &Path) -> Command {
     command
 }
 
-/// Writes a white image whose format is chosen by the file extension
+/// 白い画像を書き出す。形式はファイルの拡張子で決まる
 pub fn write_image(path: &Path, width: u32, height: u32) {
     image::RgbImage::from_pixel(width, height, image::Rgb([255, 255, 255]))
         .save(path)

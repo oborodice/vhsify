@@ -5,7 +5,7 @@ const WOW_DEPTH_SAMPLES: f32 = 30.0;
 const FLUTTER_RATE_HZ: f32 = 7.0;
 const FLUTTER_DEPTH_SAMPLES: f32 = 5.0;
 
-/// ローパスフィルタ（一次IIRフィルタ）でテープ帯域幅をシミュレート
+/// ローパスフィルタ(一次 IIR フィルタ)でテープ帯域幅をシミュレート
 pub(super) fn lowpass(
     samples: Vec<i16>,
     sample_rate: f32,
@@ -43,7 +43,7 @@ pub(super) fn hiss(mut samples: Vec<i16>, amplitude: f32) -> Vec<i16> {
     samples
 }
 
-/// LFOによるワウフラッター（テープの速度ムラによるピッチ揺れ）
+/// LFO によるワウフラッター(テープの速度ムラによるピッチ揺れ)
 pub(super) fn wow_flutter(samples: Vec<i16>, sample_rate: f32, channels: usize) -> Vec<i16> {
     let num_frames = samples.len() / channels;
     // 補間には次のフレームが必要なため、2 フレーム未満の音声はそのまま返す
@@ -88,12 +88,12 @@ mod tests {
             .collect()
     }
 
-    /// Largest noise hiss can add or subtract
+    /// hiss が足し引きするノイズの最大値
     fn max_hiss() -> i16 {
         (HISS_AMPLITUDE * i16::MAX as f32).ceil() as i16
     }
 
-    /// Largest absolute sample in the second half, after the filter has settled
+    /// フィルタが落ち着いた後半のサンプルの、絶対値の最大
     fn settled_peak(samples: &[i16]) -> i16 {
         samples[samples.len() / 2..]
             .iter()
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn lowpass_attenuates_the_highest_frequency() {
-        // Alternating samples are the Nyquist frequency; a one-pole filter at 8 kHz keeps about 36%
+        // 正負が交互のサンプルはナイキスト周波数。8 kHz の一次フィルタでは約 36% が残る
         let input: Vec<i16> = (0..FRAMES)
             .map(|i| if i % 2 == 0 { 10000 } else { -10000 })
             .collect();
@@ -172,7 +172,7 @@ mod tests {
 
         let mean = output.iter().map(|&s| f64::from(s)).sum::<f64>() / output.len() as f64;
         assert!(mean.abs() < 5.0, "mean noise was {mean:.1}");
-        // Uniform noise over this many samples comes close to the amplitude on both sides
+        // これだけのサンプル数があれば、一様なノイズは正負どちらも振幅の近くまで届く
         let reach = max_hiss() * 8 / 10;
         let (min, max) = (*output.iter().min().unwrap(), *output.iter().max().unwrap());
         assert!(
@@ -195,9 +195,9 @@ mod tests {
 
     #[test]
     fn wow_flutter_reads_nearby_frames_within_its_depth() {
-        // Each sample holds its own frame index, so the output shows how far each frame was read from
+        // 各サンプルに自分のフレーム番号を入れておくと、出力から各フレームがどこから読まれたかが分かる
         let ramp: Vec<i16> = (0..FRAMES as i16).collect();
-        // Plus one for the truncation to i16
+        // i16 への切り捨ての分を 1 足す
         let max_shift = (WOW_DEPTH_SAMPLES + FLUTTER_DEPTH_SAMPLES) as i32 + 1;
 
         let output = wow_flutter(ramp, SAMPLE_RATE, 1);

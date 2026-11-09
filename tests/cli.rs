@@ -106,7 +106,7 @@ fn missing_output_dir_for_image_fails() {
 #[test]
 fn missing_output_dir_for_video_fails() {
     let tmp = TempDir::new().unwrap();
-    // Validation only checks that the input exists, so an empty file is enough and ffmpeg is not needed
+    // 入力の検証はファイルがあるかしか見ないので、空のファイルで足り、ffmpeg も要らない
     std::fs::write(tmp.path().join("input.mp4"), "").unwrap();
 
     let output = common::vhsify(tmp.path())

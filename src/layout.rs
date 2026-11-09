@@ -7,31 +7,31 @@ pub(crate) enum ScaleMode {
     Crop,
 }
 
-/// Returns the width of a `width`x`height` source scaled to `TARGET_HEIGHT` rows, rounded to the
-/// nearest even number. Videos are encoded as yuv420p, which needs an even width, and an even width
-/// also leaves an even excess so that bars and crops split evenly on both sides.
+/// `width`x`height` の入力を高さ `TARGET_HEIGHT` に縮小したときの幅を、最も近い偶数に丸めて返す。
+/// 動画は幅が偶数でなければならない yuv420p で書き出すため。幅が偶数なら余りも偶数になり、
+/// 黒帯や切り取りを左右に均等に分けられる
 pub(crate) fn scaled_width(width: u32, height: u32) -> u32 {
-    // The scaled width is width * TARGET_HEIGHT / height. Halving it, rounding half up and doubling
-    // gives the nearest even number.
+    // 縮小後の幅は width * TARGET_HEIGHT / height。これを半分にして四捨五入し、2 倍すると
+    // 最も近い偶数になる
     let numerator = u64::from(width) * u64::from(TARGET_HEIGHT);
     let denominator = 2 * u64::from(height);
     let pairs = (numerator + denominator / 2) / denominator;
     (pairs * 2) as u32
 }
 
-/// Where content scaled to `TARGET_HEIGHT` goes in the output
+/// 高さ `TARGET_HEIGHT` に縮小した内容を、出力のどこに置くか
 #[derive(Debug, PartialEq)]
 pub(crate) enum Layout {
-    /// Wide content in crop mode: keep the `TARGET_WIDTH` columns starting at `x`
+    /// 横長の内容を crop モードで: `x` から `TARGET_WIDTH` 列ぶんを残す
     Crop { x: u32 },
-    /// Wide content in bars mode: keep the full `width` and cover `bar_width` columns on each side
+    /// 横長の内容を bars モードで: 幅 `width` のまま、左右の `bar_width` 列ずつを黒で覆う
     Bars { width: u32, bar_width: u32 },
-    /// Content no wider than 4:3: place it at `x` on a black `TARGET_WIDTH` canvas
+    /// 4:3 より横長でない内容: 幅 `TARGET_WIDTH` の黒い画面の `x` の位置に置く
     Pad { x: u32 },
 }
 
 impl Layout {
-    /// `scaled_width` is expected to come from [`scaled_width`], so it is even
+    /// `scaled_width` は [`scaled_width`] で求めた値を想定しているので、偶数になる
     pub(crate) fn new(scaled_width: u32, mode: ScaleMode) -> Self {
         debug_assert!(
             scaled_width % 2 == 0,
@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn content_just_wider_than_4_3_is_cropped_in_crop_mode() {
-        // 642 is the smallest even width above 640
+        // 642 は 640 より大きい最小の偶数
         assert_eq!(Layout::new(642, ScaleMode::Crop), Layout::Crop { x: 1 });
     }
 
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn scaled_width_rounds_to_the_nearest_even_number() {
-        // 853.3 and 854.7 both go to 854, 852.7 goes to 852, and exactly 853 rounds up
+        // 853.3 と 854.7 はどちらも 854、852.7 は 852 になり、ちょうど 853 は切り上がる
         assert_eq!(scaled_width(1920, 1080), 854);
         assert_eq!(scaled_width(1282, 720), 854);
         assert_eq!(scaled_width(1279, 720), 852);
