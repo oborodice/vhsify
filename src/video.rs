@@ -20,7 +20,7 @@ pub(crate) fn process(
 ) -> Result<String, String> {
     ffmpeg::check_installed()?;
     init_thread_pool();
-    let temp = create_temp_dir();
+    let temp = create_temp_dir()?;
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
     let info = get_video_info(input_path)?;
@@ -33,7 +33,7 @@ pub(crate) fn process(
     )?;
     interrupt::check()?;
 
-    let frames = collect_frames(&temp.dir);
+    let frames = collect_frames(&temp.dir)?;
     if frames.is_empty() {
         return Err(format!("No video frames found: {}", input_path));
     }
@@ -76,16 +76,17 @@ fn init_thread_pool() {
         .ok();
 }
 
-fn create_temp_dir() -> TempDir {
+fn create_temp_dir() -> Result<TempDir, String> {
     let dir = std::env::temp_dir().join(format!("vhsify_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("Failed to create temp dir");
-    TempDir {
+    std::fs::create_dir_all(&dir)
+        .map_err(|_| format!("Failed to create temp dir: {}", dir.display()))?;
+    Ok(TempDir {
         frame_pattern: dir.join("frame_%05d.jpg"),
         raw_wav: dir.join("audio_raw.wav"),
         processed_wav: dir.join("audio_vhs.wav"),
         progress: dir.join("progress.txt"),
         dir,
-    }
+    })
 }
 
 fn get_video_info(input_path: &str) -> Result<VideoInfo, String> {
@@ -111,15 +112,15 @@ fn extract_frames(
     Ok(())
 }
 
-fn collect_frames(temp_dir: &Path) -> Vec<PathBuf> {
+fn collect_frames(temp_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut frames: Vec<_> = std::fs::read_dir(temp_dir)
-        .unwrap()
+        .map_err(|_| format!("Failed to read frames: {}", temp_dir.display()))?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|p| p.extension().map(|e| e == "jpg").unwrap_or(false))
         .collect();
     frames.sort();
-    frames
+    Ok(frames)
 }
 
 fn apply_effects_to_frames(frames: &[PathBuf], progress_path: &Path) {
