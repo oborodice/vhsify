@@ -46,6 +46,10 @@ pub(super) fn hiss(mut samples: Vec<i16>, amplitude: f32) -> Vec<i16> {
 /// LFOによるワウフラッター（テープの速度ムラによるピッチ揺れ）
 pub(super) fn wow_flutter(samples: Vec<i16>, sample_rate: f32, channels: usize) -> Vec<i16> {
     let num_frames = samples.len() / channels;
+    // 補間には次のフレームが必要なため、2 フレーム未満の音声はそのまま返す
+    if num_frames < 2 {
+        return samples;
+    }
     let mut output = vec![0i16; samples.len()];
     let pi2 = 2.0 * std::f32::consts::PI;
 
@@ -224,7 +228,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug (#31): num_frames - 2 underflows when the audio has fewer than two frames"]
     fn wow_flutter_handles_a_single_frame() {
         let output = wow_flutter(vec![1000, -1000], SAMPLE_RATE, 2);
 
