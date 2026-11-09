@@ -3,7 +3,7 @@ use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 use crate::orientation;
 
-pub fn process(
+pub(crate) fn process(
     input_path: &str,
     scale_mode: ScaleMode,
     output_dir: Option<&str>,
