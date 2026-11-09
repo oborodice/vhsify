@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+mod probe;
+
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,6 +10,7 @@ use rayon::prelude::*;
 use crate::image as vhs_image;
 use crate::interrupt;
 use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
+use probe::VideoInfo;
 
 pub(crate) fn process(
     input_path: &str,
@@ -21,8 +23,14 @@ pub(crate) fn process(
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
-    let (src_w, src_h, fps) = get_video_info(input_path)?;
-    extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode)?;
+    let info = get_video_info(input_path)?;
+    extract_frames(
+        input_path,
+        frame_pattern_str,
+        info.width,
+        info.height,
+        scale_mode,
+    )?;
     interrupt::check()?;
 
     let frames = collect_frames(&temp.dir);
@@ -36,7 +44,12 @@ pub(crate) fn process(
     interrupt::check()?;
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
-    reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref())?;
+    reassemble(
+        frame_pattern_str,
+        &info.fps,
+        &output_path,
+        audio_path.as_deref(),
+    )?;
 
     Ok(output_path)
 }
@@ -82,7 +95,7 @@ fn create_temp_dir() -> TempDir {
     }
 }
 
-fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
+fn get_video_info(input_path: &str) -> Result<VideoInfo, String> {
     let error = || format!("Failed to read video info: {}", input_path);
     let output = Command::new("ffprobe")
         .args([
@@ -101,32 +114,7 @@ fn get_video_info(input_path: &str) -> Result<(u32, u32, String), String> {
     if !output.status.success() {
         return Err(error());
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let fields: HashMap<&str, &str> = stdout
-        .lines()
-        .filter_map(|line| line.split_once('='))
-        .collect();
-    let size = |key| {
-        fields
-            .get(key)
-            .and_then(|val| val.parse::<u32>().ok())
-            .ok_or_else(error)
-    };
-    let (width, height) = (size("width")?, size("height")?);
-    let fps = fields.get("r_frame_rate").ok_or_else(error)?.to_string();
-    let rotation: f64 = fields
-        .get("rotation")
-        .and_then(|val| val.parse().ok())
-        .unwrap_or(0.0);
-
-    // ffprobe は保存されたままの大きさを返すが、ffmpeg はデコードしたフレームを回転させるので、90 度単位の回転では縦横が入れ替わる
-    let quarter_turn = matches!((rotation.round() as i64).rem_euclid(360), 90 | 270);
-    let (width, height) = if quarter_turn {
-        (height, width)
-    } else {
-        (width, height)
-    };
-    Ok((width, height, fps))
+    probe::parse(&String::from_utf8_lossy(&output.stdout)).ok_or_else(error)
 }
 
 fn extract_frames(
