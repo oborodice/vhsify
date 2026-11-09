@@ -10,8 +10,13 @@ pub(crate) fn process(
     output_dir: Option<&str>,
     output_name: Option<&str>,
 ) -> Result<String, String> {
-    let mut img =
-        image::open(input_path).map_err(|_| format!("Failed to open image: {}", input_path))?;
+    let error = || format!("Failed to open image: {}", input_path);
+    // 拡張子と中身の形式が違う画像も読めるよう、形式は中身から判定する
+    let mut img = image::ImageReader::open(input_path)
+        .and_then(|reader| reader.with_guessed_format())
+        .map_err(|_| error())?
+        .decode()
+        .map_err(|_| error())?;
     if let Some(orientation) = orientation::read(input_path) {
         img.apply_orientation(orientation);
     }
