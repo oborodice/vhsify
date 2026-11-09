@@ -52,10 +52,21 @@ jobs:
         with:
           components: clippy
 
+      # vcpkg は dav1d をソースからビルドし、3 分ほどかかるのでキャッシュする
+      - name: Cache dav1d
+        id: cache-dav1d
+        uses: actions/cache@v6
+        with:
+          path: C:/vcpkg/installed
+          key: ${{ runner.os }}-vcpkg-dav1d-x64-windows-static-md
+
       - name: Install dav1d
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
+        run: vcpkg install dav1d:x64-windows-static-md
+
+      - name: Install pkg-config
         shell: pwsh
         run: |
-          vcpkg install dav1d:x64-windows-static-md
           choco install pkgconfiglite --yes
           echo "PKG_CONFIG_PATH=C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig" >> $env:GITHUB_ENV
 
@@ -65,8 +76,9 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      # ffmpeg は入れないので、動画のテストは外す
       - name: Run tests
-        run: cargo test
+        run: cargo test --bins --test cli --test image
 
   auto-merge:
     needs: [test, windows]
