@@ -1,20 +1,21 @@
 pub(super) fn read(path: &str) -> Result<(hound::WavSpec, Vec<i16>), String> {
-    let mut reader = hound::WavReader::open(path).expect("Failed to open WAV");
+    let error = |_| format!("Failed to read audio: {}", path);
+    let mut reader = hound::WavReader::open(path).map_err(error)?;
     let spec = reader.spec();
-    let samples: Vec<i16> = reader
+    let samples = reader
         .samples::<i16>()
-        .map(|s| s.expect("Failed to read sample"))
-        .collect();
+        .collect::<Result<Vec<i16>, _>>()
+        .map_err(error)?;
     Ok((spec, samples))
 }
 
 pub(super) fn write(path: &str, spec: hound::WavSpec, samples: Vec<i16>) -> Result<(), String> {
-    let mut writer = hound::WavWriter::create(path, spec).expect("Failed to create WAV");
+    let error = |_| format!("Failed to write audio: {}", path);
+    let mut writer = hound::WavWriter::create(path, spec).map_err(error)?;
     for sample in samples {
-        writer.write_sample(sample).expect("Failed to write sample");
+        writer.write_sample(sample).map_err(error)?;
     }
-    writer.finalize().expect("Failed to finalize WAV");
-    Ok(())
+    writer.finalize().map_err(error)
 }
 
 #[cfg(test)]
