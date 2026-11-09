@@ -35,3 +35,77 @@ pub(super) fn parse(output: &str) -> Option<VideoInfo> {
     };
     Some(VideoInfo { width, height, fps })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(width: u32, height: u32, fps: &str) -> Option<VideoInfo> {
+        Some(VideoInfo {
+            width,
+            height,
+            fps: fps.to_string(),
+        })
+    }
+
+    #[test]
+    fn reads_the_size_and_frame_rate() {
+        let output = "width=1920\nheight=1080\nr_frame_rate=30000/1001\n";
+
+        assert_eq!(parse(output), info(1920, 1080, "30000/1001"));
+    }
+
+    #[test]
+    fn quarter_turns_swap_width_and_height() {
+        // 時計回りか反時計回りかで、ffprobe は 90 と -90(270)のどちらも返す
+        for rotation in ["90", "-90", "270", "-270"] {
+            let output = format!("width=320\nheight=240\nr_frame_rate=30/1\nrotation={rotation}\n");
+
+            assert_eq!(
+                parse(&output),
+                info(240, 320, "30/1"),
+                "rotation={rotation}"
+            );
+        }
+    }
+
+    #[test]
+    fn half_and_full_turns_keep_width_and_height() {
+        for rotation in ["0", "180", "-180", "360"] {
+            let output = format!("width=320\nheight=240\nr_frame_rate=30/1\nrotation={rotation}\n");
+
+            assert_eq!(
+                parse(&output),
+                info(320, 240, "30/1"),
+                "rotation={rotation}"
+            );
+        }
+    }
+
+    #[test]
+    fn rotation_close_to_a_quarter_turn_is_rounded() {
+        let output = "width=320\nheight=240\nr_frame_rate=30/1\nrotation=89.999\n";
+
+        assert_eq!(parse(output), info(240, 320, "30/1"));
+    }
+
+    #[test]
+    fn unreadable_rotation_is_ignored() {
+        let output = "width=320\nheight=240\nr_frame_rate=30/1\nrotation=N/A\n";
+
+        assert_eq!(parse(output), info(320, 240, "30/1"));
+    }
+
+    #[test]
+    fn missing_or_unreadable_size_or_frame_rate_is_none() {
+        for output in [
+            "height=240\nr_frame_rate=30/1\n",
+            "width=320\nr_frame_rate=30/1\n",
+            "width=320\nheight=240\n",
+            "width=N/A\nheight=240\nr_frame_rate=30/1\n",
+            "",
+        ] {
+            assert_eq!(parse(output), None, "{output:?}");
+        }
+    }
+}
