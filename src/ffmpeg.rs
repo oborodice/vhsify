@@ -1,10 +1,15 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
-/// ffmpeg が見つからなければエラーを返す
+/// ffmpeg か ffprobe が見つからなければエラーを返す。ffprobe は ffmpeg と一緒に配られるので、
+/// どちらがなくても ffmpeg を入れるよう案内する
 pub(crate) fn check_installed() -> Result<(), String> {
-    if Command::new("ffmpeg").arg("-version").output().is_err() {
-        return Err("ffmpeg not found. Please install ffmpeg and try again.".to_string());
+    for tool in ["ffmpeg", "ffprobe"] {
+        if Command::new(tool).arg("-version").output().is_err() {
+            return Err(format!(
+                "{tool} not found. Please install ffmpeg and try again."
+            ));
+        }
     }
     Ok(())
 }
