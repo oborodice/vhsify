@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 
 use crate::image as vhs_image;
+use crate::interrupt;
 use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 
 pub(crate) fn process(
@@ -17,19 +18,23 @@ pub(crate) fn process(
 ) -> Result<String, String> {
     check_ffmpeg()?;
     init_thread_pool();
+    interrupt::watch();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
     let (src_w, src_h, fps) = get_video_info(input_path)?;
     extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode)?;
+    interrupt::check()?;
 
     let frames = collect_frames(&temp.dir);
     if frames.is_empty() {
         return Err(format!("No video frames found: {}", input_path));
     }
     apply_effects_to_frames(&frames, &temp.progress);
+    interrupt::check()?;
 
     let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
+    interrupt::check()?;
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref())?;
@@ -155,6 +160,9 @@ fn apply_effects_to_frames(frames: &[PathBuf], progress_path: &Path) {
     let total: usize = frames.len();
     let counter = AtomicUsize::new(0);
     frames.par_iter().enumerate().for_each(|(i, frame_path)| {
+        if interrupt::requested() {
+            return;
+        }
         apply_effect_to_frame(frame_path, i);
         let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
         report_progress(done, total, progress_path);
