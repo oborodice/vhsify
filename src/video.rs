@@ -30,7 +30,7 @@ pub fn process(
     apply_effects_to_frames(&frames, &temp.progress);
 
     let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
-    let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
+    let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref())?;
 
