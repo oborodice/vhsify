@@ -38,8 +38,38 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  # リリースでは Windows 版も配布しているので、Windows でしかコンパイルされない部分も確かめる
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install dav1d
+        shell: pwsh
+        run: |
+          vcpkg install dav1d:x64-windows-static-md
+          choco install pkgconfiglite --yes
+          echo "PKG_CONFIG_PATH=C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig" >> $env:GITHUB_ENV
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test
+
   auto-merge:
-    needs: test
+    needs: [test, windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'oborodice/vhsify'
     permissions:
