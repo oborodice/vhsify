@@ -613,6 +613,31 @@ mod unix {
     }
 
     #[test]
+    fn terminating_stops_between_frames_and_removes_the_temp_dir() {
+        require_ffmpeg!();
+        // kill コマンドの既定のシグナル
+        let result = interrupt_conversion("2", "progress.txt", "TERM", Target::VhsifyOnly);
+
+        // 128 + SIGTERM(15)
+        assert_eq!(result.status.code(), Some(143));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+    }
+
+    #[test]
+    fn closing_the_terminal_reports_the_interrupt() {
+        require_ffmpeg!();
+        // ターミナルを閉じると、SIGHUP がプロセスグループ全体に届く
+        let result = interrupt_conversion("10", "frame_00001.jpg", "HUP", Target::ProcessGroup);
+
+        // 128 + SIGHUP(1)
+        assert_eq!(result.status.code(), Some(129));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
+    }
+
+    #[test]
     fn failed_write_leaves_no_output() {
         require_ffmpeg!();
         let case = OutDirCase::new();
@@ -670,6 +695,25 @@ mod unix {
         let result = interrupt_write("INT", Target::VhsifyOnly, WhileWaiting::SignalAgain("INT"));
 
         assert_eq!(result.status.code(), Some(130));
+    }
+
+    #[test]
+    fn terminating_while_writing_leaves_no_output() {
+        require_ffmpeg!();
+        let result = interrupt_write("TERM", Target::VhsifyOnly, WhileWaiting::Release);
+
+        assert_eq!(result.status.code(), Some(143));
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert_eq!(result.leftovers, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_different_second_signal_also_exits_without_waiting_for_ffmpeg() {
+        require_ffmpeg!();
+        // Ctrl+C のあとに kill されたら、後片付けを待たずに、あとのシグナルの終了コードで終わる
+        let result = interrupt_write("INT", Target::VhsifyOnly, WhileWaiting::SignalAgain("TERM"));
+
+        assert_eq!(result.status.code(), Some(143));
     }
 
     /// シグナルの送り先
