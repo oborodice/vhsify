@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # タグを打つ前に、3 つの OS でリリースのビルドが通るかを確かめる。公開と Homebrew の更新はしない
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -53,6 +55,11 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      # dav1d などのリンクに問題があると、ビルドは通っても起動できないことがあるので、実際に起動する
+      - name: Check that the binary runs
+        shell: bash
+        run: target/${{ matrix.target }}/release/vhsify --version
+
       - name: Package (macOS/Linux)
         if: matrix.os != 'windows-latest'
         run: tar -czf ${{ matrix.artifact }}.tar.gz -C target/${{ matrix.target }}/release vhsify
@@ -63,12 +70,14 @@ jobs:
         run: Compress-Archive -Path target\${{ matrix.target }}\release\vhsify.exe -DestinationPath ${{ matrix.artifact }}.zip
 
       - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.artifact }}.*
 
   update-homebrew:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
