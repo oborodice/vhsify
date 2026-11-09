@@ -16,7 +16,7 @@ pub fn process(
     let img = scale_to_4_3(img, scale_mode);
 
     let mut rgb = img.into_rgb8();
-    apply_effect(&mut rgb, 0);
+    apply_effect_with_large_stack(&mut rgb);
 
     let output_path = crate::utils::make_output_path(input_path, output_dir, output_name);
     rgb.save(&output_path).expect("Failed to save image");
@@ -40,6 +40,22 @@ fn scale_to_4_3(img: image::DynamicImage, scale_mode: ScaleMode) -> image::Dynam
         Layout::Pad { x } => pad(&scaled, x),
     };
     image::DynamicImage::from(laid_out)
+}
+
+// ntsc-rs のエフェクトはスタックを多く使う。動画のフレームを処理するスレッドプールと、画像のエフェクトを
+// 実行するスレッドの両方で、このサイズのスタックを使う
+pub(crate) const EFFECT_STACK_SIZE: usize = 8 * 1024 * 1024;
+
+// メインスレッドのスタックは Windows では 1MB しかないため、画像のエフェクトは別のスレッドで実行する
+fn apply_effect_with_large_stack(rgb: &mut image::RgbImage) {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(EFFECT_STACK_SIZE)
+            .spawn_scoped(scope, || apply_effect(rgb, 0))
+            .expect("Failed to spawn effect thread")
+            .join()
+            .expect("Effect thread panicked");
+    });
 }
 
 pub(crate) fn apply_effect(rgb: &mut image::RgbImage, frame_num: usize) {

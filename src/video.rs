@@ -61,7 +61,7 @@ fn check_ffmpeg() -> Result<(), String> {
 
 fn init_thread_pool() {
     rayon::ThreadPoolBuilder::new()
-        .stack_size(8 * 1024 * 1024)
+        .stack_size(vhs_image::EFFECT_STACK_SIZE)
         .build_global()
         .ok();
 }
