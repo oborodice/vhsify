@@ -180,6 +180,35 @@ fn avif_input_is_saved_as_avif() {
 }
 
 #[test]
+fn image_with_a_mismatched_extension_is_read_by_its_content() {
+    let tmp = TempDir::new().unwrap();
+    // 中身は JPEG だが、名前は .png
+    let input = tmp.path().join("input.png");
+    common::write_image(&tmp.path().join("input.jpg"), 64, 48);
+    std::fs::rename(tmp.path().join("input.jpg"), &input).unwrap();
+
+    let output_path = common::run(tmp.path(), &input, &[]);
+
+    // 出力の形式は、これまでどおり入力の拡張子で決まる
+    assert_eq!(output_path, tmp.path().join("input_vhs.png"));
+    let bytes = std::fs::read(&output_path).unwrap();
+    assert_eq!(
+        image::guess_format(&bytes).unwrap(),
+        image::ImageFormat::Png
+    );
+    assert_eq!(image::image_dimensions(&output_path).unwrap(), (640, 480));
+}
+
+#[test]
+fn exif_orientation_is_applied_to_an_image_with_a_mismatched_extension() {
+    let output = convert_jpeg_with_orientation("input.png", 6);
+
+    assert_eq!(output.dimensions(), (640, 480));
+    assert_portrait_bars(&output);
+    assert_white_corner(&output, PORTRAIT_COLUMNS, Corner::TopRight);
+}
+
+#[test]
 fn vhs_effect_adds_noise_to_flat_image() {
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("input.png");
