@@ -94,6 +94,13 @@ mod tests {
     }
 
     #[test]
+    fn zero_width_content_is_centered_in_any_mode() {
+        for mode in [ScaleMode::Bars, ScaleMode::Crop] {
+            assert_eq!(Layout::new(0, mode), Layout::Pad { x: 320 });
+        }
+    }
+
+    #[test]
     fn scaled_width_keeps_the_aspect_ratio_at_480_rows() {
         assert_eq!(scaled_width(640, 480), 640);
         assert_eq!(scaled_width(1280, 960), 640);
@@ -108,6 +115,13 @@ mod tests {
         assert_eq!(scaled_width(1282, 720), 854);
         assert_eq!(scaled_width(1279, 720), 852);
         assert_eq!(scaled_width(853, 480), 854);
+    }
+
+    #[test]
+    fn scaled_width_of_extremely_narrow_content_is_zero() {
+        // 縮小後の幅は 0.48 列と 0.048 列で、最も近い偶数は 0 になる
+        assert_eq!(scaled_width(2, 2000), 0);
+        assert_eq!(scaled_width(1, 10000), 0);
     }
 
     #[test]
