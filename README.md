@@ -39,7 +39,7 @@ $ vhsify <input>.<ext> --mode crop  # crop sides to 4:3
 # --output-dir specifies the output directory
 $ vhsify <input>.<ext> --output-dir <dir>
 
-# --output-name specifies the output filename (without extension)
+# --output-name specifies the output filename (the input's extension is added if omitted)
 $ vhsify <input>.<ext> --output-name <name>
 
 # --version shows the version
