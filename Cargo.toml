@@ -21,3 +21,7 @@ ctrlc = "3.5.2"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+# テストでも画像処理が速く動くよう、依存クレートだけは最適化してビルドする
+[profile.dev.package."*"]
+opt-level = 3
