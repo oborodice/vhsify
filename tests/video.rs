@@ -441,7 +441,8 @@ fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interr
         Signal::VhsifyOnly => child.id().to_string(),
         Signal::ProcessGroup => format!("-{}", child.id()),
     };
-    run_checked(Command::new("kill").args(["-INT", &target]));
+    // `--` keeps a negative process group id from being read as an option by the Linux kill
+    run_checked(Command::new("kill").args(["-s", "INT", "--", &target]));
 
     let status = child.wait().unwrap();
     Interrupted {
@@ -602,6 +603,11 @@ fn ffmpeg() -> Command {
 #[track_caller]
 fn run_checked(command: &mut Command) -> String {
     let output = command.output().unwrap();
-    assert!(output.status.success(), "{}", common::stderr(&output));
+    assert!(
+        output.status.success(),
+        "{command:?} exited with {}: {}",
+        output.status,
+        common::stderr(&output)
+    );
     common::stdout(&output)
 }
