@@ -163,12 +163,18 @@ mod tests {
     }
 
     #[test]
-    fn hiss_noise_is_centered_on_zero() {
+    fn hiss_noise_spreads_over_the_amplitude_around_zero() {
         let output = hiss(vec![0; FRAMES], HISS_AMPLITUDE);
 
         let mean = output.iter().map(|&s| f64::from(s)).sum::<f64>() / output.len() as f64;
-        assert!(output.iter().any(|&s| s > 0));
         assert!(mean.abs() < 5.0, "mean noise was {mean:.1}");
+        // Uniform noise over this many samples comes close to the amplitude on both sides
+        let reach = max_hiss() * 8 / 10;
+        let (min, max) = (*output.iter().min().unwrap(), *output.iter().max().unwrap());
+        assert!(
+            min <= -reach && max >= reach,
+            "noise ranged {min}..={max}, expected beyond ±{reach}"
+        );
     }
 
     #[test]
