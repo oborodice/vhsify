@@ -41,6 +41,10 @@ jobs:
   # リリースでは Windows 版も配布しているので、Windows でしかコンパイルされない部分も確かめる
   windows:
     runs-on: windows-latest
+    env:
+      # dav1d-sys は pkg-config で dav1d を探す。どちらも vcpkg で入れる
+      PKG_CONFIG: C:/vcpkg/installed/x64-windows/tools/pkgconf/pkgconf.exe
+      PKG_CONFIG_PATH: C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -52,23 +56,17 @@ jobs:
         with:
           components: clippy
 
-      # vcpkg は dav1d をソースからビルドし、3 分ほどかかるのでキャッシュする
-      - name: Cache dav1d
-        id: cache-dav1d
+      # vcpkg はソースからビルドし、3 分ほどかかるのでキャッシュする。キャッシュがあれば外部から何も取得しない
+      - name: Cache vcpkg packages
+        id: cache-vcpkg
         uses: actions/cache@v6
         with:
           path: C:/vcpkg/installed
-          key: ${{ runner.os }}-vcpkg-dav1d-x64-windows-static-md
+          key: ${{ runner.os }}-vcpkg-dav1d-x64-windows-static-md-pkgconf-x64-windows
 
-      - name: Install dav1d
-        if: steps.cache-dav1d.outputs.cache-hit != 'true'
-        run: vcpkg install dav1d:x64-windows-static-md
-
-      - name: Install pkg-config
-        shell: pwsh
-        run: |
-          choco install pkgconfiglite --yes
-          echo "PKG_CONFIG_PATH=C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig" >> $env:GITHUB_ENV
+      - name: Install dav1d and pkg-config
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: vcpkg install dav1d:x64-windows-static-md pkgconf:x64-windows
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
