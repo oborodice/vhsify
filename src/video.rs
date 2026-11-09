@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use crate::image as vhs_image;
 use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 
-pub fn process(
+pub(crate) fn process(
     input_path: &str,
     scale_mode: ScaleMode,
     output_dir: Option<&str>,
