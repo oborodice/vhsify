@@ -587,7 +587,7 @@ mod unix {
     fn interrupting_stops_between_frames_and_removes_the_temp_dir() {
         require_ffmpeg!();
         // 60 フレーム。エフェクトをかけ始めると進捗のファイルが現れる
-        let result = interrupt_conversion("2", "progress.txt", Signal::VhsifyOnly);
+        let result = interrupt_conversion("2", "progress.txt", "INT", Target::VhsifyOnly);
 
         assert_eq!(result.status.code(), Some(130));
         assert_eq!(result.leftovers, Vec::<String>::new());
@@ -604,9 +604,34 @@ mod unix {
     fn interrupting_from_the_terminal_reports_the_interrupt() {
         require_ffmpeg!();
         // 300 フレーム。シグナルが届いたとき、ffmpeg がまだフレームを取り出している最中になるようにする
-        let result = interrupt_conversion("10", "frame_00001.jpg", Signal::ProcessGroup);
+        let result = interrupt_conversion("10", "frame_00001.jpg", "INT", Target::ProcessGroup);
 
         assert_eq!(result.status.code(), Some(130));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
+    }
+
+    #[test]
+    fn terminating_stops_between_frames_and_removes_the_temp_dir() {
+        require_ffmpeg!();
+        // kill コマンドの既定のシグナル
+        let result = interrupt_conversion("2", "progress.txt", "TERM", Target::VhsifyOnly);
+
+        // 128 + SIGTERM(15)
+        assert_eq!(result.status.code(), Some(143));
+        assert_eq!(result.leftovers, Vec::<String>::new());
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+    }
+
+    #[test]
+    fn closing_the_terminal_reports_the_interrupt() {
+        require_ffmpeg!();
+        // ターミナルを閉じると、SIGHUP がプロセスグループ全体に届く
+        let result = interrupt_conversion("10", "frame_00001.jpg", "HUP", Target::ProcessGroup);
+
+        // 128 + SIGHUP(1)
+        assert_eq!(result.status.code(), Some(129));
         assert_eq!(result.leftovers, Vec::<String>::new());
         assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
         assert!(!result.stderr.contains("Failed to"), "{}", result.stderr);
@@ -646,7 +671,7 @@ mod unix {
     #[test]
     fn interrupting_from_the_terminal_while_writing_leaves_no_output() {
         require_ffmpeg!();
-        let result = interrupt_write(Signal::ProcessGroup, WhileWaiting::Release);
+        let result = interrupt_write("INT", Target::ProcessGroup, WhileWaiting::Release);
 
         assert_eq!(result.status.code(), Some(130));
         assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
@@ -656,7 +681,7 @@ mod unix {
     #[test]
     fn interrupting_while_writing_discards_the_output_even_if_ffmpeg_finishes() {
         require_ffmpeg!();
-        let result = interrupt_write(Signal::VhsifyOnly, WhileWaiting::Release);
+        let result = interrupt_write("INT", Target::VhsifyOnly, WhileWaiting::Release);
 
         assert_eq!(result.status.code(), Some(130));
         assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
@@ -667,14 +692,34 @@ mod unix {
     fn interrupting_twice_exits_without_waiting_for_ffmpeg() {
         require_ffmpeg!();
         // 偽の ffmpeg は合図がないと書き出しを終えないので、2 回目の SIGINT で終了しない限り vhsify は終わらない
-        let result = interrupt_write(Signal::VhsifyOnly, WhileWaiting::InterruptAgain);
+        let result = interrupt_write("INT", Target::VhsifyOnly, WhileWaiting::SignalAgain("INT"));
 
         assert_eq!(result.status.code(), Some(130));
     }
 
-    enum Signal {
+    #[test]
+    fn terminating_while_writing_leaves_no_output() {
+        require_ffmpeg!();
+        let result = interrupt_write("TERM", Target::VhsifyOnly, WhileWaiting::Release);
+
+        assert_eq!(result.status.code(), Some(143));
+        assert!(result.stderr.contains("Interrupted"), "{}", result.stderr);
+        assert_eq!(result.leftovers, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_different_second_signal_also_exits_without_waiting_for_ffmpeg() {
+        require_ffmpeg!();
+        // Ctrl+C のあとに kill されたら、後片付けを待たずに、あとのシグナルの終了コードで終わる
+        let result = interrupt_write("INT", Target::VhsifyOnly, WhileWaiting::SignalAgain("TERM"));
+
+        assert_eq!(result.status.code(), Some(143));
+    }
+
+    /// シグナルの送り先
+    enum Target {
         VhsifyOnly,
-        /// ターミナルは Ctrl+C をプロセスグループ全体に送るので、ffmpeg も中断される
+        /// ターミナルは Ctrl+C などをプロセスグループ全体に送るので、ffmpeg も中断される
         ProcessGroup,
     }
 
@@ -686,9 +731,15 @@ mod unix {
     }
 
     /// 指定した長さの白い 640x480 30 fps の動画を変換し、vhsify の作業用ディレクトリに `wait_for` という名前の
-    /// ファイルが現れたら SIGINT を送る。vhsify の終わり方と、システムの一時ディレクトリに残ったものを返す
+    /// ファイルが現れたら、`name` のシグナル(`kill -s` に渡す名前)を送る。vhsify の終わり方と、
+    /// システムの一時ディレクトリに残ったものを返す
     #[track_caller]
-    fn interrupt_conversion(seconds: &str, wait_for: &str, signal: Signal) -> Interrupted {
+    fn interrupt_conversion(
+        seconds: &str,
+        wait_for: &str,
+        name: &str,
+        target: Target,
+    ) -> Interrupted {
         let tmp = TempDir::new().unwrap();
         let input = tmp.path().join("input.mp4");
         run_checked(
@@ -708,7 +759,7 @@ mod unix {
                 .filter_map(|entry| entry.ok())
                 .any(|entry| entry.path().join(wait_for).exists())
         };
-        let (status, stderr) = interrupt(&mut command, ready, signal, |_| {});
+        let (status, stderr) = interrupt(&mut command, ready, name, target, |_| {});
         Interrupted {
             status,
             stderr,
@@ -716,18 +767,18 @@ mod unix {
         }
     }
 
-    /// SIGINT を送ってから vhsify が終了するまでにすること
+    /// シグナルを送ってから vhsify が終了するまでにすること
     enum WhileWaiting {
         /// 偽の ffmpeg が中断されていなければ、成功で終わらせる
         Release,
-        /// SIGINT を送り続ける。1 回目が処理される前に届いた 2 回目は 1 回にまとめられるため
-        InterruptAgain,
+        /// 指定したシグナルを vhsify に送り続ける。1 回目が処理される前に届いた同じシグナルは 1 回にまとめられるため
+        SignalAgain(&'static str),
     }
 
-    /// 偽の ffmpeg が出力の動画を書き出している最中に SIGINT を送り、`while_waiting` のとおりにして終了を待つ。
-    /// vhsify の終わり方と、出力先のフォルダに残ったものを返す
+    /// 偽の ffmpeg が出力の動画を書き出している最中に `name` のシグナルを送り、`while_waiting` のとおりにして
+    /// 終了を待つ。vhsify の終わり方と、出力先のフォルダに残ったものを返す
     #[track_caller]
-    fn interrupt_write(signal: Signal, while_waiting: WhileWaiting) -> Interrupted {
+    fn interrupt_write(name: &str, target: Target, while_waiting: WhileWaiting) -> Interrupted {
         let case = OutDirCase::new();
         let fake = fake_ffmpeg(case.tmp.path(), FakeWrite::WaitForRelease);
 
@@ -736,9 +787,9 @@ mod unix {
         let ready = || !common::dir_entries(&case.out_dir).is_empty();
         let act = |pid| match while_waiting {
             WhileWaiting::Release => std::fs::write(&fake.release, "").unwrap(),
-            WhileWaiting::InterruptAgain => send_sigint(pid, Signal::VhsifyOnly),
+            WhileWaiting::SignalAgain(again) => send_signal(pid, again, Target::VhsifyOnly),
         };
-        let (status, stderr) = interrupt(&mut command, ready, signal, act);
+        let (status, stderr) = interrupt(&mut command, ready, name, target, act);
         Interrupted {
             status,
             stderr,
@@ -746,13 +797,14 @@ mod unix {
         }
     }
 
-    /// `command` を専用のプロセスグループで起動し、`ready` が true を返したら SIGINT を送る。そのあと終了するまで、
-    /// 100 ms ごとに pid を渡して `while_waiting` を呼ぶ。終了状態と標準エラー出力を返す
+    /// `command` を専用のプロセスグループで起動し、`ready` が true を返したら `name` のシグナルを送る。そのあと
+    /// 終了するまで、100 ms ごとに pid を渡して `while_waiting` を呼ぶ。終了状態と標準エラー出力を返す
     #[track_caller]
     fn interrupt(
         command: &mut Command,
         ready: impl Fn() -> bool,
-        signal: Signal,
+        name: &str,
+        target: Target,
         mut while_waiting: impl FnMut(u32),
     ) -> (ExitStatus, String) {
         // パイプがいっぱいにならないよう、標準エラー出力はファイルに書かせて、あとから進捗を読む
@@ -765,10 +817,13 @@ mod unix {
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(60);
         while !ready() {
-            assert!(Instant::now() < deadline, "never got ready to send SIGINT");
+            assert!(
+                Instant::now() < deadline,
+                "never got ready to send SIG{name}"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
-        send_sigint(child.id(), signal);
+        send_signal(child.id(), name, target);
 
         let status = loop {
             while_waiting(child.id());
@@ -777,7 +832,7 @@ mod unix {
             }
             if Instant::now() >= deadline {
                 child.kill().unwrap();
-                panic!("did not exit after SIGINT");
+                panic!("did not exit after SIG{name}");
             }
             std::thread::sleep(Duration::from_millis(100));
         };
@@ -788,13 +843,13 @@ mod unix {
     }
 
     #[track_caller]
-    fn send_sigint(pid: u32, signal: Signal) {
-        let target = match signal {
-            Signal::VhsifyOnly => pid.to_string(),
-            Signal::ProcessGroup => format!("-{pid}"),
+    fn send_signal(pid: u32, name: &str, target: Target) {
+        let target = match target {
+            Target::VhsifyOnly => pid.to_string(),
+            Target::ProcessGroup => format!("-{pid}"),
         };
         // 負のプロセスグループ ID が Linux の kill にオプションとして読まれないよう、`--` を付ける
-        run_checked(Command::new("kill").args(["-s", "INT", "--", &target]));
+        run_checked(Command::new("kill").args(["-s", name, "--", &target]));
     }
 
     /// vhsify が出力の動画を書き出すとき、偽の ffmpeg が途中まで書いたあとにどうするか

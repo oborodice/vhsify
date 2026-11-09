@@ -1,5 +1,6 @@
 use ntsc_rs::{NtscEffect, settings::standard::UseField, yiq_fielding::Rgb};
 
+use crate::interrupt;
 use crate::layout::{self, Layout, ScaleMode, TARGET_HEIGHT, TARGET_WIDTH};
 use crate::orientation;
 
@@ -22,7 +23,10 @@ pub(crate) fn process(
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let error = format!("Failed to save image: {}", output_path);
     crate::output_path::write_via_partial(&output_path, error.clone(), |partial| {
-        rgb.save(partial).map_err(|_| error)
+        rgb.save(partial)
+            .map_err(|_| error)
+            // 保存し終えていても、中断されたなら残さない
+            .and_then(|()| interrupt::check())
     })?;
     Ok(output_path)
 }

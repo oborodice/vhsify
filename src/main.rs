@@ -31,10 +31,10 @@ fn main() {
     let args = Args::parse();
     match run(args) {
         Ok(output_path) => println!("Saved: {}", output_path),
-        // Ctrl+C は ffmpeg にも届き、ffmpeg の失敗として返ってくることがあるため、どの段階のエラーでも中断として報告する
+        // Ctrl+C などは ffmpeg にも届き、ffmpeg の失敗として返ってくることがあるため、どの段階のエラーでも中断として報告する
         Err(_) if interrupt::requested() => {
             eprintln!("{}", interrupt::MESSAGE);
-            std::process::exit(interrupt::EXIT_CODE);
+            std::process::exit(interrupt::exit_code());
         }
         Err(message) => {
             eprintln!("{}", message);
@@ -48,6 +48,7 @@ fn run(args: Args) -> Result<String, String> {
     let output_dir = args.output_dir.as_deref();
     let output_name = args.output_name.as_deref();
 
+    interrupt::watch();
     match validate(input_path, output_dir)? {
         Media::Image => image::process(input_path, args.mode, output_dir, output_name),
         Media::Video => video::process(input_path, args.mode, output_dir, output_name),
