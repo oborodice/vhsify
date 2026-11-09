@@ -80,7 +80,7 @@ fn square_image_is_padded_with_bars() {
 
 #[test]
 fn exif_orientation_normal_keeps_image_as_is() {
-    let output = convert_with_orientation(1);
+    let output = convert_jpeg_with_orientation("input.jpg", 1);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopLeft);
@@ -88,7 +88,7 @@ fn exif_orientation_normal_keeps_image_as_is() {
 
 #[test]
 fn exif_orientation_invalid_value_keeps_image_as_is() {
-    let output = convert_with_orientation(9);
+    let output = convert_jpeg_with_orientation("input.jpg", 9);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopLeft);
@@ -96,7 +96,7 @@ fn exif_orientation_invalid_value_keeps_image_as_is() {
 
 #[test]
 fn exif_orientation_flip_horizontal_moves_top_left_to_top_right() {
-    let output = convert_with_orientation(2);
+    let output = convert_jpeg_with_orientation("input.jpg", 2);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::TopRight);
@@ -104,7 +104,7 @@ fn exif_orientation_flip_horizontal_moves_top_left_to_top_right() {
 
 #[test]
 fn exif_orientation_rotate_180_turns_image_upside_down() {
-    let output = convert_with_orientation(3);
+    let output = convert_jpeg_with_orientation("input.jpg", 3);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::BottomRight);
@@ -112,7 +112,7 @@ fn exif_orientation_rotate_180_turns_image_upside_down() {
 
 #[test]
 fn exif_orientation_flip_vertical_moves_top_left_to_bottom_left() {
-    let output = convert_with_orientation(4);
+    let output = convert_jpeg_with_orientation("input.jpg", 4);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_white_corner(&output, LANDSCAPE_COLUMNS, Corner::BottomLeft);
@@ -120,7 +120,7 @@ fn exif_orientation_flip_vertical_moves_top_left_to_bottom_left() {
 
 #[test]
 fn exif_orientation_rotate_90_flip_horizontal_keeps_top_left_in_portrait() {
-    let output = convert_with_orientation(5);
+    let output = convert_jpeg_with_orientation("input.jpg", 5);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
@@ -129,7 +129,7 @@ fn exif_orientation_rotate_90_flip_horizontal_keeps_top_left_in_portrait() {
 
 #[test]
 fn exif_orientation_rotate_90_moves_top_left_to_top_right() {
-    let output = convert_with_orientation(6);
+    let output = convert_jpeg_with_orientation("input.jpg", 6);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
@@ -138,7 +138,7 @@ fn exif_orientation_rotate_90_moves_top_left_to_top_right() {
 
 #[test]
 fn exif_orientation_rotate_270_flip_horizontal_moves_top_left_to_bottom_right() {
-    let output = convert_with_orientation(7);
+    let output = convert_jpeg_with_orientation("input.jpg", 7);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
@@ -147,7 +147,7 @@ fn exif_orientation_rotate_270_flip_horizontal_moves_top_left_to_bottom_right() 
 
 #[test]
 fn exif_orientation_rotate_270_moves_top_left_to_bottom_left() {
-    let output = convert_with_orientation(8);
+    let output = convert_jpeg_with_orientation("input.jpg", 8);
 
     assert_eq!(output.dimensions(), (640, 480));
     assert_portrait_bars(&output);
@@ -289,11 +289,12 @@ fn assert_format_is_kept(ext: &str) {
     assert_eq!(image::image_dimensions(&output_path).unwrap(), (640, 480));
 }
 
-/// 左上の 4 分の 1 が白く残りが黒い 640x480 の JPEG に、指定した EXIF の向きを付けて変換する
+/// 左上の 4 分の 1 が白く残りが黒い 640x480 の JPEG に、指定した EXIF の向きを付けて `file_name` という名前で
+/// 書き出し、変換する
 #[track_caller]
-fn convert_with_orientation(orientation: u16) -> GrayImage {
+fn convert_jpeg_with_orientation(file_name: &str, orientation: u16) -> GrayImage {
     let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("input.jpg");
+    let input = tmp.path().join(file_name);
     let img = RgbImage::from_fn(640, 480, |x, y| {
         if x < 320 && y < 240 {
             Rgb([255, 255, 255])
