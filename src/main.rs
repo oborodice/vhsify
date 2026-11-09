@@ -32,7 +32,8 @@ fn main() {
         Ok(output_path) => println!("Saved: {}", output_path),
         Err(message) => {
             eprintln!("{}", message);
-            std::process::exit(1);
+            // 中断時は 128 + SIGINT(2)。シグナルで中断されたコマンドの慣習的な終了コード
+            std::process::exit(if video::interrupted() { 130 } else { 1 });
         }
     }
 }

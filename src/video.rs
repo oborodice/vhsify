@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use rayon::prelude::*;
 
@@ -17,19 +17,23 @@ pub(crate) fn process(
 ) -> Result<String, String> {
     check_ffmpeg()?;
     init_thread_pool();
+    stop_on_interrupt();
     let temp = create_temp_dir();
     let frame_pattern_str = temp.frame_pattern.to_str().unwrap();
 
     let (src_w, src_h, fps) = get_video_info(input_path)?;
     extract_frames(input_path, frame_pattern_str, src_w, src_h, scale_mode)?;
+    check_interrupted()?;
 
     let frames = collect_frames(&temp.dir);
     if frames.is_empty() {
         return Err(format!("No video frames found: {}", input_path));
     }
     apply_effects_to_frames(&frames, &temp.progress);
+    check_interrupted()?;
 
     let has_audio = process_audio(input_path, &temp.raw_wav, &temp.processed_wav);
+    check_interrupted()?;
     let output_path = crate::output_path::build(input_path, output_dir, output_name);
     let audio_path = has_audio.then(|| temp.processed_wav.to_str().unwrap().to_string());
     reassemble(frame_pattern_str, &fps, &output_path, audio_path.as_deref())?;
@@ -50,6 +54,30 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.dir).ok();
     }
+}
+
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn interrupted() -> bool {
+    INTERRUPTED.load(Ordering::Relaxed)
+}
+
+// Ctrl+C でその場で終了すると Drop が実行されず一時ディレクトリが残るため、中断の印だけを立てて
+// 処理の区切りでエラーとして戻る。2 回目の Ctrl+C では後片付けを待たずに終了する
+fn stop_on_interrupt() {
+    ctrlc::set_handler(|| {
+        if INTERRUPTED.swap(true, Ordering::Relaxed) {
+            std::process::exit(130);
+        }
+    })
+    .expect("Failed to set Ctrl+C handler");
+}
+
+fn check_interrupted() -> Result<(), String> {
+    if interrupted() {
+        return Err("Interrupted".to_string());
+    }
+    Ok(())
 }
 
 fn check_ffmpeg() -> Result<(), String> {
@@ -155,6 +183,9 @@ fn apply_effects_to_frames(frames: &[PathBuf], progress_path: &Path) {
     let total: usize = frames.len();
     let counter = AtomicUsize::new(0);
     frames.par_iter().enumerate().for_each(|(i, frame_path)| {
+        if interrupted() {
+            return;
+        }
         apply_effect_to_frame(frame_path, i);
         let done = counter.fetch_add(1, Ordering::Relaxed) + 1;
         report_progress(done, total, progress_path);
