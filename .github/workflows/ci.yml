@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -81,7 +81,7 @@ jobs:
         run: cargo test --bins --test cli --test image
 
   auto-merge:
-    needs: [test, windows]
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'oborodice/vhsify'
     permissions:
