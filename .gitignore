@@ -2,3 +2,4 @@
 /output/**
 !/output/**/
 !/output/**/.gitkeep
+/vcpkg_installed

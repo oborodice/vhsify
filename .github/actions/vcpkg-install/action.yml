@@ -1,0 +1,16 @@
+name: vcpkg install
+description: vcpkg.json の依存関係 (dav1d と pkg-config) を vcpkg_installed に入れる
+
+runs:
+  using: composite
+  steps:
+    - name: vcpkg install
+      shell: pwsh
+      run: |
+        # ランナーの vcpkg はイメージを作った時点のものなので、vcpkg.json の builtin-baseline のコミットをまだ持っていないことがある
+        $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+        git -C $env:VCPKG_INSTALLATION_ROOT fetch origin $baseline
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # dav1d は静的リンクし、pkg-config はビルド中に動かすツールなので通常の DLL 版にする
+        & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install --triplet x64-windows-static-md --host-triplet x64-windows
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

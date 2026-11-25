@@ -15,3 +15,10 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 20
     rebase-strategy: "auto"
+
+  # Windows 版に静的リンクする dav1d の版は vcpkg.json の builtin-baseline で決まる
+  - package-ecosystem: "vcpkg"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    rebase-strategy: "auto"

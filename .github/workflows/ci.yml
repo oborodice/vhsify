@@ -42,9 +42,9 @@ jobs:
   windows:
     runs-on: windows-latest
     env:
-      # dav1d-sys は pkg-config で dav1d を探す。どちらも vcpkg で入れる
-      PKG_CONFIG: C:/vcpkg/installed/x64-windows/tools/pkgconf/pkgconf.exe
-      PKG_CONFIG_PATH: C:/vcpkg/installed/x64-windows-static-md/lib/pkgconfig
+      # dav1d-sys は pkg-config で dav1d を探す。どちらも vcpkg.json に書いた版を vcpkg で入れる
+      PKG_CONFIG: ${{ github.workspace }}/vcpkg_installed/x64-windows/tools/pkgconf/pkgconf.exe
+      PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-md/lib/pkgconfig
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -61,12 +61,12 @@ jobs:
         id: cache-vcpkg
         uses: actions/cache@v6
         with:
-          path: C:/vcpkg/installed
-          key: ${{ runner.os }}-vcpkg-dav1d-x64-windows-static-md-pkgconf-x64-windows
+          path: vcpkg_installed
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
 
       - name: Install dav1d and pkg-config
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
-        run: vcpkg install dav1d:x64-windows-static-md pkgconf:x64-windows
+        uses: ./.github/actions/vcpkg-install
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
